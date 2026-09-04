@@ -24,13 +24,19 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="bot.py" />
+    <Compile Include="Cogs\admin.py" />
     <Compile Include="Cogs\example_cog.py" />
     <Compile Include="Cogs\game_lifecycle.py" />
     <Compile Include="Cogs\lynch.py" />
+    <Compile Include="Cogs\mayor.py" />
+    <Compile Include="Cogs\roster.py" />
+    <Compile Include="Cogs\scheduler.py" />
+    <Compile Include="Cogs\settings.py" />
     <Compile Include="config.py" />
     <Compile Include="Core\game.py" />
     <Compile Include="Core\helpers.py" />
     <Compile Include="Core\models.py" />
+    <Compile Include="Roles\modifier.py" />
     <Compile Include="Roles\roles.py" />
     <Compile Include="Roles\__init__.py" />
   </ItemGroup>

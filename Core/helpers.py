@@ -37,14 +37,13 @@ async def send_to_channel(
     await channel.send(embed=embed)
 
 
-async def send_newspaper(game: Game, image_url: str) -> None:
-    # JS attached the image via AttachmentBuilder; simpler and equally
-    # effective here as an embed image, since we're passed a URL, not a
-    # local file or buffer.
+async def send_newspaper(game: Game) -> None:
     if game.announcement_channel is None:
         raise ValueError("Game has no announcement channel set.")
+    if game.newspaper_url is None:
+        return
     embed = discord.Embed(color=discord.Color.default())
-    embed.set_image(url=image_url)
+    embed.set_image(url=game.newspaper_url)
     await game.announcement_channel.send(embed=embed)
 
 
@@ -94,8 +93,16 @@ async def apply_kill(game: Game, player: Player, *, cause: str) -> None:
     # the hook-dispatch design — e.g. a loop over game.alive_players
     # checking for a `Role.on_other_death(game, player)` method.
 
+async def apply_revive(game: Game, player: Player) -> None:
+    game.revive(player)
+    for channel in game.guild.text_channels:
+        await unmute_in_channel(player.member, channel)
+    if game.dead_channel is not None:
+        await mute_in_channel(player.member, game.dead_channel)
+        await set_channel_visible(player.member, game.dead_channel, visible=False)
+    await send_mod_log(game, "REVIVED", f"{player.member.display_name} was revived by a GM.", color=discord.Color.green())
 
-def _parse_time(value: str) -> time:
+def parse_time(value: str) -> time:
     try:
         return datetime.strptime(value, "%H:%M").time()
     except ValueError:

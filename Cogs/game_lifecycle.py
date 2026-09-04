@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from core import game as game_module
 from core.game import GameError, GamePhase
-from core.helpers import ack_silent, reply, send_announcement, send_mod_log, _parse_time
+from core.helpers import ack_silent, reply, send_announcement, send_mod_log, parse_time
 
 
 class GameLifecycle(commands.Cog):
@@ -106,8 +106,8 @@ class GameLifecycle(commands.Cog):
     @app_commands.describe(morning="HH:MM, 24-hour", night="HH:MM, 24-hour")
     async def times(self, interaction: discord.Interaction, morning: str, night: str) -> None:
         game = game_module.get_game(interaction.guild_id)
-        game.morning_time = _parse_time(morning)
-        game.night_time = _parse_time(night)
+        game.morning_time = parse_time(morning)
+        game.night_time = parse_time(night)
         await reply(interaction, "Set morning and night start times.")
         await send_mod_log(game, "TIMES", f"Morning: {morning}\nNight: {night}")
 

@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from core.models import Player
+from core.models import Player, LifeState
 
 if TYPE_CHECKING:
-    from roles.role import Role
+    from roles.role import Role, Actor
 
 
 class GamePhase(Enum):
@@ -64,13 +64,12 @@ class Game:
     def cub_guess_candidates(self, cub: Player) -> list[Player]:
         return self.cub_candidates
 
+    # --- death handling ------------------------------------------------------
 
     pending_night_deaths: list[tuple[Player, str]] = field(default_factory=list)
 
     def queue_night_kill(self, player: Player, *, cause: str) -> None:
-        """Marks a player to die at dawn, rather than immediately, this is
-        what distinguishes a night kill (wolves, etc.) from an immediate
-        one Resolved together via resolve_pending_deaths()."""
+        """Marks a player to die at dawn, Resolved together via resolve_pending_deaths()."""
         if not player.alive:
             return
         if any(p is player for p, _ in self.pending_night_deaths):
@@ -87,7 +86,33 @@ class Game:
             await self.kill(player, cause=cause)  # may itself queue more deaths via hooks
         return resolved
 
+    async def kill(self, player: Player, *, cause: str) -> None:
+        if player.life_state in (LifeState.DEAD, LifeState.PERMA_DEAD):
+            return
+        player.life_state = LifeState.PERMA_DEAD if player.life_state is LifeState.SKELETON else LifeState.DEAD
+        player.protections.clear()
 
+        if self.mayor is player:
+            self.mayor = self.mayor_successor
+            self.mayor_successor = None
+
+        if player.role is not None:
+            await player.role.on_death(self)
+        for modifier in player.modifiers:
+            await modifier.on_death(self)
+
+        for other in self.alive_players:
+            if other.role is not None:
+                await other.role.on_other_death(self, player)
+            for modifier in other.modifiers:
+                await modifier.on_other_death(self, player)
+
+    def revive(self, player: Player) -> None:
+        if player.life_state is not LifeState.DEAD:
+            return  # can't revive a still-living player, a skeleton, or a perma-dead one
+        player.life_state = LifeState.ALIVE
+
+    # --- player management ---------------------------------------------
     @property
     def alive_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.alive]
@@ -113,27 +138,148 @@ class Game:
         # out once we build the roster/assignment cog.
         raise NotImplementedError
 
-    async def kill(self, player: Player, *, cause: str) -> None:
-        if not player.alive:
-            return
-        player.alive = False
-        player.protections.clear()
-        # TODO(core/helpers.py): announce death, revoke channel access,
-        # move player to dead_channel. Pure state change ends here.
+    # --- voting / lynch management -------------------------------------
+    can_vote: bool = False
+    votes: dict["Player | None", list[Player]] = field(default_factory=dict)   # None key = abstained bucket
+    voter_choice: dict[Player, "Player | None"] = field(default_factory=dict)  # reverse index for change-vote
 
-    # --- night/day orchestration -------------------------------------
+    def cast_vote(self, voter: Player, target: Player | None) -> None:
+        """target=None means abstain. Pure state — no messaging, no I/O."""
+        if not self.can_vote:
+            raise GameError("You cannot vote yet.")
+        if not voter.alive:
+            raise GameError("You are already dead.")
+        if target is None or not target.alive:
+            raise GameError("This person is already dead or not playing.")
+
+        if voter in self.voter_choice:
+            previous = self.voter_choice[voter]
+            if previous == target:
+                raise GameError("You have already voted for that.")
+            bucket = self.votes.get(previous)
+            if bucket and voter in bucket:
+                bucket.remove(voter)
+
+        self.votes.setdefault(target, []).append(voter)
+        self.voter_choice[voter] = target
+
+    def resolve_lynch(self) -> tuple[Player | None, str]:
+        """Tallies the day's votes and resets vote state. Returns
+        (winner, reason) — reason is one of: no_votes, abstained, tie,
+        mayor_tiebreak, lynched. winner is None unless reason is
+        lynched/mayor_tiebreak."""
+        self.can_vote = False
+
+        for player in self.alive_players:
+            if player not in self.voter_choice:
+                self.votes.setdefault(None, []).append(player)
+                self.voter_choice[player] = None
+
+        if not self.votes:
+            self.votes.clear()
+            self.voter_choice.clear()
+            return None, "no_votes"
+
+        ranked = sorted(self.votes.items(), key=lambda item: len(item[1]), reverse=True)
+        top_count = len(ranked[0][1])
+
+        if ranked[0][0] is None and top_count >= len(self.alive_players) // 2:
+            self.votes.clear()
+            self.voter_choice.clear()
+            return None, "abstained"
+
+        tied = [target for target, voters in ranked if target is not None and len(voters) == top_count]
+
+        winner: Player | None = None
+        reason = "tie"
+        if len(tied) == 1:
+            winner, reason = tied[0], "lynched"
+        elif len(tied) > 1 and self.mayor is not None:
+            # must read the mayor's choice before clearing voter_choice below
+            mayor_vote = self.voter_choice.get(self.mayor)
+            if mayor_vote in tied:
+                winner, reason = mayor_vote, "mayor_tiebreak"
+
+        self.votes.clear()
+        self.voter_choice.clear()
+        return winner, reason
+
+    # --- mayor ---------------------------------------------------------
+    mayor: Player | None = None
+    mayor_successor: Player | None = None
+    mayor_can_vote: bool = False
+    mayor_votes: dict[Player, list[Player]] = field(default_factory=dict)
+    mayor_voter_choice: dict[Player, Player] = field(default_factory=dict)
+
+    def start_mayor_vote(self) -> None:
+        self.mayor_can_vote = True
+        self.mayor_votes.clear()
+        self.mayor_voter_choice.clear()
+
+    def cast_mayor_vote(self, voter: Player, target: Player) -> None:
+        if not self.mayor_can_vote:
+            raise GameError("The vote for mayor has not started.")
+        if voter is target:
+            raise GameError("You cannot vote for yourself.")
+        if not voter.alive or not target.alive:
+            raise GameError("Only living players can vote or be voted for.")
+
+        previous = self.mayor_voter_choice.get(voter)
+        if previous is target:
+            raise GameError("You have already voted for that.")
+        if previous is not None:
+            bucket = self.mayor_votes.get(previous)
+            if bucket and voter in bucket:
+                bucket.remove(voter)
+
+        self.mayor_votes.setdefault(target, []).append(voter)
+        self.mayor_voter_choice[voter] = target
+
+    def end_mayor_vote(self) -> tuple[Player | None, bool]:
+        """Returns (winner, tied). winner is None if no votes were cast,
+        or if the top two candidates are tied."""
+        self.mayor_can_vote = False
+        if not self.mayor_votes:
+            return None, False
+
+        ranked = sorted(self.mayor_votes.items(), key=lambda item: len(item[1]), reverse=True)
+        tied = len(ranked) > 1 and len(ranked[1][1]) == len(ranked[0][1])
+
+        self.mayor_votes.clear()
+        self.mayor_voter_choice.clear()
+
+        if tied:
+            return None, True
+
+        self.mayor = ranked[0][0]
+        return self.mayor, False
+
+    # --- night/day orchestration ---------------------------------------
     async def resolve_night(self) -> None:
         self.cub_candidates = []
-        acting = [p for p in self.alive_players if p.role and p.role.night_priority is not None]
-        acting.sort(key=lambda p: p.role.night_priority)
-        for player in acting:
-            await player.role.resolve_night(self)
+        acting: list[tuple[Player, "Actor"]] = []
+        for p in self.alive_players:
+            if p.role is not None and p.role.night_priority is not None:
+                acting.append((p, p.role))
+            for modifier in p.modifiers:
+                if modifier.night_priority is not None:
+                    acting.append((p, modifier))
+        acting.sort(key=lambda pair: pair[1].night_priority)
+        for _, actor in acting:
+            await actor.resolve_night(self)
 
     async def resolve_day(self) -> None:
-        acting = [p for p in self.alive_players if p.role and p.role.day_priority is not None]
-        acting.sort(key=lambda p: p.role.day_priority)
-        for player in acting:
-            await player.role.resolve_day(self)
+        self.cub_candidates = []
+        acting: list[tuple[Player, "Actor"]] = []
+        for p in self.alive_players:
+            if p.role is not None and p.role.day_priority is not None:
+                acting.append((p, p.role))
+            for modifier in p.modifiers:
+                if modifier.day_priority is not None:
+                    acting.append((p, modifier))
+        acting.sort(key=lambda pair: pair[1].day_priority)
+        for _, actor in acting:
+            await actor.resolve_day(self)
 
     # --- I/O stubs, to be wired up alongside role interaction prompts --
     async def prompt_target(self, player: Player, prompt: str) -> Player: ...
@@ -149,6 +295,8 @@ class Game:
 # ---------------------------------------------------------------------------
 _games: dict[int, Game] = {}
 
+def all_games() -> list[Game]:
+    return list(_games.values())
 
 def get_game(guild_id: int) -> Game:
     game = _games.get(guild_id)

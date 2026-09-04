@@ -7,66 +7,57 @@ from typing import ClassVar, TYPE_CHECKING
 from core.models import Faction
 
 if TYPE_CHECKING:
-    # Only needed for type hints on night_action/day_action — Role never
-    # touches Game at import time, so this stays TYPE_CHECKING-only even
-    # though core/game.py currently does the same in reverse for Role.
     from core.game import Game
     from core.models import Player
 
 
 class ActionPriority(IntEnum):
-    LOCK = 10               # Locksmith
-    PROTECT = 20            # Silver Angel
-    INFO_GATHER = 30        # Seer, Fox, Prophet, Bloodhound, Trapmaker setup
-    CONVERT = 40            # Ancient Wolf, Vampire Lord (turn variant)
-    KILL = 50               # Wolves, Vampire Lord, Vigilante, Witch, Rabid Wolf, Cub
-    DEATH_RESOLUTION = 60   # heartbreak, vengeful spirit checks, trap reveal
-    POST = 70               # Undertaker-style next-day info prep
+    LOCK = 10
+    PROTECT = 20
+    INFO_GATHER = 30
+    CONVERT = 40
+    KILL = 50
+    DEATH_RESOLUTION = 60
+    POST = 70
 
 
-class Role(ABC):
+class Actor(ABC):
+    """Shared shape for anything that resolves during night/day and reacts
+    to deaths — a Player's base Role, and each of their stacked Modifiers,
+    both are one."""
+
     name: ClassVar[str]
-    faction: ClassVar[Faction]
     night_priority: ClassVar[ActionPriority | None] = None
     day_priority: ClassVar[int | None] = None
-    reveals_as: ClassVar[Faction | None] = None
 
     def __init__(self, player: "Player"):
         self.player = player
-        self.charges_used = 0
-
-        self.night_target: "Player | None" = None  # set by a cog command, read at resolution
-
-    def apparent_faction(self) -> Faction:
-        return self.reveals_as or self.faction
-
-    async def night_action(self, game: "Game") -> None:
-        """Override in subclasses that have a night action. No-op by default."""
-        return None
-
-    async def day_action(self, game: "Game") -> None:
-        """Override in subclasses that have a day action. No-op by default."""
-        return None
+        self.night_target: "Player | None" = None
+        self.day_target: "Player | None" = None
 
     async def resolve_night(self, game: "Game") -> None:
-        """Called after all night actions have been collected, in order of
-        night_priority. No-op by default."""
         return None
 
-    async def resolve_day(self , game: "Game") -> None:
-        """Called after all day actions have been collected, in order of
-        day_priority. No-op by default."""
+    async def resolve_day(self, game: "Game") -> None:
         return None
 
     async def on_death(self, game: "Game") -> None:
-        """Called on this role's own player when they die (e.g. Hunter's
-        final shot). No-op by default."""
         return None
 
     async def on_other_death(self, game: "Game", dead_player: "Player") -> None:
-        """Called on every other alive player's role whenever someone else
-        dies. No-op by default."""
         return None
+
+
+class Role(Actor):
+    faction: ClassVar[Faction]
+    reveals_as: ClassVar[Faction | None] = None
+
+    def __init__(self, player: "Player"):
+        super().__init__(player)
+        self.charges_used = 0
+
+    def apparent_faction(self) -> Faction:
+        return self.reveals_as or self.faction
 
 
 ROLE_REGISTRY: dict[str, type[Role]] = {}
@@ -75,7 +66,6 @@ ROLE_REGISTRY: dict[str, type[Role]] = {}
 def register_role(cls: type[Role]) -> type[Role]:
     ROLE_REGISTRY[cls.name] = cls
     return cls
-
 
 # --- Example roles, one file each once we split roles/ out -----------------
 

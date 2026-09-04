@@ -1,10 +1,11 @@
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from core import game as game_module
-from core.game import GameError, GamePhase
-from core.helpers import ack_silent, reply, send_announcement, send_mod_log, _parse_time
+from core.game import GameError
+from core.helpers import parse_time, reply, send_mod_log, send_to_channel
+
 
 class Lynch(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -15,9 +16,6 @@ class Lynch(commands.Cog):
     async def cog_app_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
-        # app_commands wraps exceptions raised inside a command in
-        # CommandInvokeError — unwrap GameError so it reaches the user as a
-        # clean message instead of a generic tree-level error.
         original = getattr(error, "original", error)
         if isinstance(original, GameError):
             await reply(interaction, str(original))
@@ -28,43 +26,45 @@ class Lynch(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def lynch_start_time(self, interaction: discord.Interaction, time: str) -> None:
         game = game_module.get_game(interaction.guild_id)
-
-        parsed_time = _parse_time(time)
-        if parsed_time is None:
-            raise GameError("Invalid time format. Please use HH:MM (24-hour format).")
-
-        await game.lynch_start_time = parsed_time
+        game.lynch_start_time = parse_time(time)
         await reply(interaction, "Lynch start time set")
 
     @lynch_group.command(name="lynch_end_time")
     @app_commands.checks.has_permissions(administrator=True)
     async def lynch_end_time(self, interaction: discord.Interaction, time: str) -> None:
         game = game_module.get_game(interaction.guild_id)
-
-        parsed_time = _parse_time(time)
-        if parsed_time is None:
-            raise GameError("Invalid time format. Please use HH:MM (24-hour format).")
-
-        await game.lynch_end_time = parsed_time
+        game.lynch_end_time = parse_time(time)
         await reply(interaction, "Lynch end time set")
 
     @lynch_group.command(name="vote")
-    async def vote(self, interaction: discord.Interaction, target: discord.Member) -> None:
+    async def vote(self, interaction: discord.Interaction, player: discord.Member) -> None:
         game = game_module.get_game(interaction.guild_id)
-        if game.phase != GamePhase.DAY:
-            raise GameError("You can only vote during the day phase.")
-        player = game.get_player(interaction.user)
-        if player is None:
-            raise GameError("You're not part of the game!")
-        target_player = game.get_player(target)
+        voter = game.get_player(interaction.user)
+        if voter is None:
+            raise GameError("You're not part of this game.")
+        target = game.get_player(player)
+        if target is None:
+            raise GameError("That person isn't part of this game.")
 
-        if target_player is None:
-            raise GameError("The target is not part of the game!")
+        game.cast_vote(voter, target)
+        await send_to_channel(
+            game.vote_channel,
+            "LYNCH VOTE",
+            f"**{voter.member.display_name}** has voted on **{target.member.display_name}** to lynch",
+        )
+        await reply(interaction, f"You voted for {target.member.display_name}.")
 
-        # Record the vote
-        player.vote = target_player
-        await send_mod_log(game, "VOTE CAST", f"{interaction.user.display_name} voted for {target.display_name}.")
-        await reply(interaction, f"You have voted for {target.display_name}.")
+    @lynch_group.command(name="vote_abstain")
+    async def vote_abstain(self, interaction: discord.Interaction) -> None:
+        game = game_module.get_game(interaction.guild_id)
+        voter = game.get_player(interaction.user)
+        if voter is None:
+            raise GameError("You're not part of this game.")
 
-async def setup(bot: commands.Bot):
+        game.cast_vote(voter, None)
+        await send_to_channel(game.vote_channel, "LYNCH VOTE", f"**{voter.member.display_name}** has abstained from voting")
+        await reply(interaction, "You abstained from voting.")
+
+
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Lynch(bot))
