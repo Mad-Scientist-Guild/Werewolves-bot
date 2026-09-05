@@ -47,7 +47,7 @@ class Actor(ABC):
         if game.phase is not GamePhase.NIGHT:
             raise GameError("It is not currently night.")
         if is_sleep_time():
-            raise GameError("It's sleep time (00:01–07:59) - night actions are locked in until morning.")
+            raise GameError("It's sleep time (00:01-07:59) - night actions are locked in until morning.")
         self.night_target = target
 
     def set_day_target(self, game: "Game", target: "Player | None") -> None:
