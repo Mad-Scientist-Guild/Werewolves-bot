@@ -3,10 +3,8 @@ from __future__ import annotations
 import discord
 from datetime import datetime, time
 
-from Core.game import Game, GameError, GamePhase
+from Core.game import Game, GameError
 from Core.models import Player
-
-from datetime import time as clock_time
 
 async def reply(interaction: discord.Interaction, msg: str, *, ephemeral: bool = True) -> None:
     if interaction.response.is_done():
@@ -75,9 +73,6 @@ def voted_for_preset(voter: Player, voted_on: Player) -> str:
 
 
 async def apply_kill(game: Game, player: Player, *, cause: str) -> None:
-    """Full death handling: state change + generic I/O. Mirrors JS's Kill(),
-    minus the mayor/wildboy-specific branches - those are role-death hooks,
-    deliberately deferred (see roles/role.py, Cub.handle_mother_death)."""
     await game.kill(player, cause=cause)
 
     for channel in game.guild.text_channels:
@@ -110,8 +105,8 @@ def parse_time(value: str) -> time:
         raise GameError(f"'{value}' isn't a valid time - use HH:MM (24-hour), e.g. 08:30.")
 
 
-SLEEP_TIME_START = clock_time(0, 1)
-SLEEP_TIME_END = clock_time(7, 59)
+SLEEP_TIME_START = time(0, 1)
+SLEEP_TIME_END = time(7, 59)
 
 def is_sleep_time(now: datetime | None = None) -> bool:
     current = (now or datetime.now()).time()

@@ -52,6 +52,10 @@ class Game:
     moderator_channel: discord.TextChannel | None = None
     dead_channel: discord.TextChannel | None = None
 
+    role_channels: dict[str, discord.TextChannel] = field(default_factory=dict)
+
+    newspaper_url: str | None = None
+
     # schedule, set via `game times` / `lynch lynch_start_time` etc.
     morning_time: time | None = None
     night_time: time | None = None
@@ -138,9 +142,12 @@ class Game:
         # out once we build the roster/assignment cog.
         raise NotImplementedError
 
+    def players_with_role(self, role_name: str) -> list[Player]:
+        return [p for p in self.players.values() if p.role is not None and p.role.name == role_name]
+
     # --- voting / lynch management -------------------------------------
     can_vote: bool = False
-    votes: dict["Player | None", list[Player]] = field(default_factory=dict)   # None key = abstained bucket
+    votes: dict["Player | None", list[Player]] = field(default_factory=dict)   # None key = abstained
     voter_choice: dict[Player, "Player | None"] = field(default_factory=dict)  # reverse index for change-vote
 
     def cast_vote(self, voter: Player, target: Player | None) -> None:
