@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import ClassVar, TYPE_CHECKING
 
-from core.models import Faction
-from roles.role import Actor
+from Core.models import Faction
+from Roles.role import Actor
 
 if TYPE_CHECKING:
-    from core.game import Game
-    from core.models import Player
+    from Core.game import Game
+    from Core.models import Player
 
 
 class Modifier(Actor):
-    """An addition that stacks on top of a Player's base Role — Lover,
+    """An addition that stacks on top of a Player's base Role - Lover,
     Turned Wolf, Vampire Spawn, Vengeful Spirit. Several can be present on
     one Player at once, unlike Role."""
 

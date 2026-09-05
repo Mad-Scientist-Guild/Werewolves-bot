@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 import discord
 
 if TYPE_CHECKING:
-    from roles.role import Role
-    from roles.modifier import Modifier
+    from Roles.role import Role
+    from Roles.modifier import Modifier
 
 
 class Faction(Enum):
@@ -22,7 +22,7 @@ class LifeState(Enum):
     ALIVE = auto()
     DEAD = auto()
     SKELETON = auto()
-    PERMA_DEAD = auto()  # a skeleton killed again — cannot be revived a second time
+    PERMA_DEAD = auto()  # a skeleton killed again - cannot be revived a second time
 
 
 @dataclass(eq=False)

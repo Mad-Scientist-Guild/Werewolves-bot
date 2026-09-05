@@ -4,7 +4,7 @@ from discord.ext import commands
 from pathlib import Path
 
 import config
-import roles  # populates ROLE_REGISTRY by importing all role modules
+import Roles  # populates ROLE_REGISTRY by importing all role modules
 
 intents = discord.Intents.default()
 intents.message_content = True   # prefix commands need this

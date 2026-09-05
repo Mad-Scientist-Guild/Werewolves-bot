@@ -2,10 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core import game as game_module
-from core.game import GameError
-from core.helpers import reply, set_channel_visible
-from roles.role import ROLE_REGISTRY
+from Core import game as game_module
+from Core.game import GameError
+from Core.helpers import reply, set_channel_visible
+from Roles.role import ROLE_REGISTRY
 
 
 class Roster(commands.Cog):

@@ -2,10 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core import game as game_module
-from core.game import GameError
-from core.helpers import ack_silent, apply_kill, apply_revive, reply, send_mod_log
-from core.models import Player
+from Core import game as game_module
+from Core.game import GameError
+from Core.helpers import ack_silent, apply_kill, apply_revive, reply, send_mod_log
+from Core.models import Player
 
 
 class Admin(commands.Cog):

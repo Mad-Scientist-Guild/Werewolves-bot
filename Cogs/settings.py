@@ -2,9 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core import game as game_module
-from core.game import GameError
-from core.helpers import reply
+from Core import game as game_module
+from Core.game import GameError
+from Core.helpers import reply
 
 RULES_TEXT = (
     "**General rules**\n"

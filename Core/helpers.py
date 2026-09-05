@@ -3,8 +3,8 @@ from __future__ import annotations
 import discord
 from datetime import datetime, time
 
-from core.game import Game, GameError, GamePhase
-from core.models import Player
+from Core.game import Game, GameError, GamePhase
+from Core.models import Player
 
 from datetime import time as clock_time
 
@@ -76,7 +76,7 @@ def voted_for_preset(voter: Player, voted_on: Player) -> str:
 
 async def apply_kill(game: Game, player: Player, *, cause: str) -> None:
     """Full death handling: state change + generic I/O. Mirrors JS's Kill(),
-    minus the mayor/wildboy-specific branches — those are role-death hooks,
+    minus the mayor/wildboy-specific branches - those are role-death hooks,
     deliberately deferred (see roles/role.py, Cub.handle_mother_death)."""
     await game.kill(player, cause=cause)
 
@@ -91,7 +91,7 @@ async def apply_kill(game: Game, player: Player, *, cause: str) -> None:
 
     # Hook point: role-specific reactions to this death (mayor succession,
     # wildboy mentor check, Cub/Mother Wolf, etc.) go here once we settle
-    # the hook-dispatch design — e.g. a loop over game.alive_players
+    # the hook-dispatch design - e.g. a loop over game.alive_players
     # checking for a `Role.on_other_death(game, player)` method.
 
 async def apply_revive(game: Game, player: Player) -> None:
@@ -107,7 +107,7 @@ def parse_time(value: str) -> time:
     try:
         return datetime.strptime(value, "%H:%M").time()
     except ValueError:
-        raise GameError(f"'{value}' isn't a valid time — use HH:MM (24-hour), e.g. 08:30.")
+        raise GameError(f"'{value}' isn't a valid time - use HH:MM (24-hour), e.g. 08:30.")
 
 
 SLEEP_TIME_START = clock_time(0, 1)

@@ -5,9 +5,9 @@ from datetime import datetime, time
 import discord
 from discord.ext import commands, tasks
 
-from core import game as game_module
-from core.game import Game, GamePhase
-from core.helpers import apply_kill, send_announcement, send_mod_log, send_newspaper
+from Core import game as game_module
+from Core.game import Game, GamePhase
+from Core.helpers import apply_kill, send_announcement, send_mod_log, send_newspaper
 
 
 def _matches(now: datetime, target: time | None) -> bool:
@@ -75,7 +75,7 @@ class Scheduler(commands.Cog):
 
     async def _start_night(self, game: Game) -> None:
         game.phase = GamePhase.NIGHT
-        await send_announcement(game, "NIGHT HAS FALLEN", "Night has begun — use your role's commands before dawn.")
+        await send_announcement(game, "NIGHT HAS FALLEN", "Night has begun - use your role's commands before dawn.")
 
     async def _handle_morning(self, game: Game) -> None:
         game.day_number += 1

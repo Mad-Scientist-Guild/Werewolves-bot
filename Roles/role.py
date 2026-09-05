@@ -4,13 +4,13 @@ from abc import ABC
 from enum import IntEnum
 from typing import ClassVar, TYPE_CHECKING
 
-from core.models import Faction
-from core.game import GameError, GamePhase
-from core.helpers import is_sleep_time
+from Core.models import Faction
+from Core.game import GameError, GamePhase
+from Core.helpers import is_sleep_time
 
 if TYPE_CHECKING:
-    from core.game import Game
-    from core.models import Player
+    from Core.game import Game
+    from Core.models import Player
 
 
 class ActionPriority(IntEnum):
@@ -25,7 +25,7 @@ class ActionPriority(IntEnum):
 
 class Actor(ABC):
     """Shared shape for anything that resolves during night/day and reacts
-    to deaths — a Player's base Role, and each of their stacked Modifiers,
+    to deaths - a Player's base Role, and each of their stacked Modifiers,
     both are one."""
 
     name: ClassVar[str]
@@ -47,7 +47,7 @@ class Actor(ABC):
         if game.phase is not GamePhase.NIGHT:
             raise GameError("It is not currently night.")
         if is_sleep_time():
-            raise GameError("It's sleep time (00:01–07:59) — night actions are locked in until morning.")
+            raise GameError("It's sleep time (00:01–07:59) - night actions are locked in until morning.")
         self.night_target = target
 
     def set_day_target(self, game: "Game", target: "Player | None") -> None:

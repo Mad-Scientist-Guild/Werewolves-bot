@@ -2,9 +2,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core import game as game_module
-from core.game import GameError
-from core.helpers import parse_time, reply, send_mod_log, send_to_channel
+from Core import game as game_module
+from Core.game import GameError
+from Core.helpers import parse_time, reply, send_mod_log, send_to_channel
 
 
 class Lynch(commands.Cog):

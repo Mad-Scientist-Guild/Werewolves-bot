@@ -6,9 +6,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core import game as game_module
-from core.game import GameError, GamePhase
-from core.helpers import ack_silent, reply, send_announcement, send_mod_log, parse_time
+from Core import game as game_module
+from Core.game import GameError, GamePhase
+from Core.helpers import ack_silent, reply, send_announcement, send_mod_log, parse_time
 
 
 class GameLifecycle(commands.Cog):
@@ -21,7 +21,7 @@ class GameLifecycle(commands.Cog):
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
         # app_commands wraps exceptions raised inside a command in
-        # CommandInvokeError — unwrap GameError so it reaches the user as a
+        # CommandInvokeError - unwrap GameError so it reaches the user as a
         # clean message instead of a generic tree-level error.
         original = getattr(error, "original", error)
         if isinstance(original, GameError):
@@ -33,7 +33,7 @@ class GameLifecycle(commands.Cog):
     async def join(self, interaction: discord.Interaction) -> None:
         game = game_module.get_game(interaction.guild_id)
         if game.started:
-            raise GameError("The game has already started — you can't join. Contact your GM.")
+            raise GameError("The game has already started - you can't join. Contact your GM.")
         if game.get_player(interaction.user) is not None:
             raise GameError("You're already part of the game!")
         game.add_player(interaction.user)
@@ -71,7 +71,7 @@ class GameLifecycle(commands.Cog):
         game.dead_channel = dead_channel
 
         await send_mod_log(game, "GAME CREATED", "A new game has been created.")
-        await send_announcement(game, "NEW GAME!", "A new game has started — join with **/game join**!")
+        await send_announcement(game, "NEW GAME!", "A new game has started - join with **/game join**!")
         await ack_silent(interaction)
 
     @game_group.command(name="start_game")
@@ -88,7 +88,7 @@ class GameLifecycle(commands.Cog):
         game.phase = GamePhase.DAY
 
         await send_mod_log(game, "STARTED", "The game has started.")
-        await send_announcement(game, "GAME START!", "The game has started — have fun everyone!")
+        await send_announcement(game, "GAME START!", "The game has started - have fun everyone!")
         await ack_silent(interaction)
 
     @game_group.command(name="finish_game")

@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from core.models import Player, LifeState
+from Core.models import Player, LifeState
 
 if TYPE_CHECKING:
-    from roles.role import Role, Actor
+    from Roles.role import Role, Actor
 
 
 class GamePhase(Enum):
@@ -21,7 +21,7 @@ class GamePhase(Enum):
 
 
 class GameError(Exception):
-    """Base for user-facing game-flow errors — cogs catch these and reply."""
+    """Base for user-facing game-flow errors - cogs catch these and reply."""
 
 
 class GameAlreadyActive(GameError):
@@ -73,7 +73,7 @@ class Game:
         if not player.alive:
             return
         if any(p is player for p, _ in self.pending_night_deaths):
-            return  # already queued — e.g. two roles targeting the same player
+            return  # already queued - e.g. two roles targeting the same player
         self.pending_night_deaths.append((player, cause))
 
     async def resolve_pending_deaths(self) -> list[tuple[Player, str]]:
@@ -122,7 +122,7 @@ class Game:
 
     def add_player(self, member: discord.Member) -> Player:
         if self.started:
-            raise GameError("Game has already started — no new players can join.")
+            raise GameError("Game has already started - no new players can join.")
         if member.id in self.players:
             raise PlayerAlreadyJoined(f"{member.display_name} has already joined.")
         player = Player(member=member)
@@ -134,7 +134,7 @@ class Game:
 
     def assign_roles(self, role_counts: dict[str, int]) -> None:
         # Distribution logic (shuffle players, instantiate Role subclasses
-        # from ROLE_REGISTRY, set player.role / player.faction) — fleshed
+        # from ROLE_REGISTRY, set player.role / player.faction) - fleshed
         # out once we build the roster/assignment cog.
         raise NotImplementedError
 
@@ -144,15 +144,15 @@ class Game:
     voter_choice: dict[Player, "Player | None"] = field(default_factory=dict)  # reverse index for change-vote
 
     def cast_vote(self, voter: Player, target: Player | None) -> None:
-        """target=None means abstain. Pure state — no messaging, no I/O."""
+        """target=None means abstain. Pure state - no messaging, no I/O."""
         if self.day_number <= 1:
             raise GameError("There is no lynching on the first day.")
         if not self.can_vote:
             raise GameError("You cannot vote yet.")
         if not voter.alive:
             raise GameError("You are already dead.")
-        if target is None or not target.alive:
-            raise GameError("This person is already dead or not playing.")
+        if target is not None and not target.alive:
+            raise GameError("This person is already dead.")
 
         if voter in self.voter_choice:
             previous = self.voter_choice[voter]
@@ -167,7 +167,7 @@ class Game:
 
     def resolve_lynch(self) -> tuple[Player | None, str]:
         """Tallies the day's votes and resets vote state. Returns
-        (winner, reason) — reason is one of: no_votes, abstained, tie,
+        (winner, reason) - reason is one of: no_votes, abstained, tie,
         mayor_tiebreak, lynched. winner is None unless reason is
         lynched/mayor_tiebreak."""
         self.can_vote = False
@@ -292,7 +292,7 @@ class Game:
 
 # ---------------------------------------------------------------------------
 # guild -> Game registry. Keyed by guild ID (int), not the discord.Guild
-# object itself — ints are stable across reconnects/cache invalidation and
+# object itself - ints are stable across reconnects/cache invalidation and
 # will serialize cleanly
 # ---------------------------------------------------------------------------
 _games: dict[int, Game] = {}
