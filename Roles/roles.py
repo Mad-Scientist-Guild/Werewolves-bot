@@ -5,6 +5,8 @@ from enum import IntEnum
 from typing import ClassVar, TYPE_CHECKING
 
 from core.models import Faction
+from core.game import GameError, GamePhase
+from core.helpers import is_sleep_time
 
 if TYPE_CHECKING:
     from core.game import Game
@@ -40,6 +42,18 @@ class Actor(ABC):
 
     async def resolve_day(self, game: "Game") -> None:
         return None
+
+    def set_night_target(self, game: "Game", target: "Player | None") -> None:
+        if game.phase is not GamePhase.NIGHT:
+            raise GameError("It is not currently night.")
+        if is_sleep_time():
+            raise GameError("It's sleep time (00:01–07:59) — night actions are locked in until morning.")
+        self.night_target = target
+
+    def set_day_target(self, game: "Game", target: "Player | None") -> None:
+        if game.phase is not GamePhase.DAY:
+            raise GameError("It is not currently day.")
+        self.day_target = target
 
     async def on_death(self, game: "Game") -> None:
         return None

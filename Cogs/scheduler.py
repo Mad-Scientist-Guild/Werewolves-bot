@@ -42,11 +42,16 @@ class Scheduler(commands.Cog):
     async def before_tick(self) -> None:
         await self.bot.wait_until_ready()
 
+    # cogs/scheduler.py
     async def _start_lynch(self, game: Game) -> None:
+        if game.day_number <= 1:
+            return
         game.can_vote = True
         await send_announcement(game, "VOTE STARTED", "**You can now vote to lynch someone!**")
 
     async def _end_lynch(self, game: Game) -> None:
+        if game.day_number <= 1:
+            return
         winner, reason = game.resolve_lynch()
 
         if reason == "no_votes":

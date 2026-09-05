@@ -6,6 +6,7 @@ from datetime import datetime, time
 from core.game import Game, GameError, GamePhase
 from core.models import Player
 
+from datetime import time as clock_time
 
 async def reply(interaction: discord.Interaction, msg: str, *, ephemeral: bool = True) -> None:
     if interaction.response.is_done():
@@ -107,3 +108,11 @@ def parse_time(value: str) -> time:
         return datetime.strptime(value, "%H:%M").time()
     except ValueError:
         raise GameError(f"'{value}' isn't a valid time — use HH:MM (24-hour), e.g. 08:30.")
+
+
+SLEEP_TIME_START = clock_time(0, 1)
+SLEEP_TIME_END = clock_time(7, 59)
+
+def is_sleep_time(now: datetime | None = None) -> bool:
+    current = (now or datetime.now()).time()
+    return SLEEP_TIME_START <= current <= SLEEP_TIME_END

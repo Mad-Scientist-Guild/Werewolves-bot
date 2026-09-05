@@ -145,6 +145,8 @@ class Game:
 
     def cast_vote(self, voter: Player, target: Player | None) -> None:
         """target=None means abstain. Pure state — no messaging, no I/O."""
+        if self.day_number <= 1:
+            raise GameError("There is no lynching on the first day.")
         if not self.can_vote:
             raise GameError("You cannot vote yet.")
         if not voter.alive:
