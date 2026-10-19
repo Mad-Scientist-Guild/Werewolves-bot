@@ -27,17 +27,16 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
 
     @app_commands.command(name="create", description="(GM) Create a new game in this server")
     @app_commands.describe(announcements="Existing announcements channel (optional - created if empty)",
-                           votes="Existing vote results channel (optional)",
                            mod_log="Existing GM moderation channel (optional)")
     async def create(self, interaction: discord.Interaction, announcements: discord.TextChannel | None = None,
-                     votes: discord.TextChannel | None = None, mod_log: discord.TextChannel | None = None) -> None:
+                     mod_log: discord.TextChannel | None = None) -> None:
         require_gm(interaction)
         await interaction.response.defer(ephemeral=True, thinking=True)
         handle = await runtime.games.create(interaction.guild_id)
         async with runtime.games.mutate(interaction.guild_id) as state:
             state.log("GAME", f"Game #{state.game_id} created by {interaction.user.display_name}.", actor=interaction.user.id)
         done = await runtime.channels.setup_base(interaction.guild, handle, announcements=announcements,
-                                                 votes=votes, mod_log=mod_log)
+                                                 mod_log=mod_log)
         async with runtime.games.mutate(interaction.guild_id) as state:
             from Core.effects import Announcement
             state.emit(Announcement(title="A NEW GAME OF XP WEREWOLVES",
@@ -45,6 +44,20 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
         await reply(interaction, "Game created. " + (", ".join(done) if done else "") +
                     "\nNext: players `/game join`, then `/setup roles_add`, `/setup families`, `/setup assign`, "
                     "`/setup channels` and finally `/game start`.")
+
+    @app_commands.command(name="delete", description="(GM) Permanently delete this server's game and its data")
+    @app_commands.describe(delete_channels="Also delete the game channels the bot created (default: keep them)")
+    async def delete(self, interaction: discord.Interaction, delete_channels: bool = False) -> None:
+        handle = runtime.games.get(interaction.guild_id)
+        require_gm(interaction, handle.state)
+        state = handle.state
+        what = (f"game #{state.game_id} ({state.phase.value}, day {state.day}, {len(state.players)} players) and "
+                "**all** its saved data: state, snapshots, reports and the audit log")
+        if delete_channels:
+            what += ", plus every game channel the bot created"
+        view = ConfirmDelete(interaction.user.id, handle.game_id, delete_channels)
+        await interaction.response.send_message(
+            f"⚠️ This permanently deletes {what}. This can't be undone.", view=view, ephemeral=True)
 
     @app_commands.command(name="join", description="Join the upcoming game")
     async def join(self, interaction: discord.Interaction) -> None:
@@ -103,6 +116,35 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
         async with runtime.games.mutate(interaction.guild_id, snapshot="before game start") as state:
             flow.start_game(state, now_in(state))
         await reply(interaction, "The game has started! Role cards are being posted in the private channels.")
+
+
+class ConfirmDelete(discord.ui.View):
+    def __init__(self, user_id: int, game_id: int, delete_channels: bool):
+        super().__init__(timeout=60)
+        self.user_id, self.game_id, self.delete_channels = user_id, game_id, delete_channels
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    @discord.ui.button(label="Delete the game", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.stop()
+        await interaction.response.edit_message(content="Deleting…", view=None)
+        handle = runtime.games.find(interaction.guild_id)
+        if handle is None or handle.game_id != self.game_id:
+            await interaction.edit_original_response(content="That game no longer exists.")
+            return
+        removed: list[str] = []
+        if self.delete_channels:
+            removed = await runtime.channels.remove_game(interaction.guild, handle.state)
+        await runtime.games.delete(interaction.guild_id, by=interaction.user.id)
+        note = f" Removed: {', '.join(removed)}." if removed else ""
+        await interaction.edit_original_response(content=f"Game #{self.game_id} has been deleted.{note}")
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.stop()
+        await interaction.response.edit_message(content="Nothing was deleted.", view=None)
 
 
 async def setup(bot: commands.Bot) -> None:

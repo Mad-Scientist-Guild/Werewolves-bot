@@ -5,13 +5,18 @@ This is how to run a game with the bot. The player guide is generated separately
 
 ## 1. Before the game
 
-1. **`/game create`.** This creates the category, `#announcements`, `#votes` and `#mod-log`, plus the Dead,
-   Vengeful Spirit and Skeleton roles. Set your GM role with `/setup gm_role` so the bot can ping you and give
+1. **`/game create`.** This creates `#announcements` and `#mod-log`, plus the Dead, Vengeful Spirit and Skeleton
+   roles. Players vote in their private channels; vote results are posted in `#announcements`. Channels are
+   sorted into the categories Important (announcements), General (village and
+   dead chat), Families, Factions (wolves, undead, coven, lovers, brothers, spirit chats), Roles (private
+   channels) and Game Masters (mod log). Existing categories with those names are reused; a category that
+   reaches Discord's 50-channel limit gets an overflow ("Roles 2"). Set your GM role with `/setup gm_role` so the bot can ping you and give
    you access to every game channel.
 2. **Players join** with `/game join`. GMs can add someone with `/setup add_player`. Put waiting-list players on
    the Reaper's list with `/setup backup add`.
-3. **Role pool.** Add roles with `/setup roles_add <role> [count]` until `/setup roles` shows as many roles as
-   players. Every role in the rules document exists, plus a plain *Villager*.
+3. **Role pool.** A new game starts with the default setup: one of every role and three Brothers. Adjust it with
+   `/setup roles_add` / `/setup roles_remove` until `/setup roles` shows as many roles as players;
+   `/setup roles_default` resets it. A plain *Villager* exists as filler but isn't in the default.
 4. **Families (houses).** Run `/setup families [size]`, then move people with `/setup family_move`. A family is a
    house: Locksmith locks, Priest blessings, the Insomniac and the Diviner all work per family.
 5. **Assign roles.** Run `/setup assign preview` and check the list. Apply it with `/setup assign apply`.
@@ -72,9 +77,9 @@ for real with the same random seed. If the result differs from the last preview,
 
 ## 4. Reading `#mod-log`
 
-Everything is logged:
-- every command, with its arguments, including rejected attempts;
+Everything that changes the game is logged:
 - every action, vote, transition, death, conversion and permission change;
+- commands that were rejected or crashed, with their arguments;
 - every error.
 
 Entries are batched into embeds. **⚠️ GM attention** messages ping the GM role. They're for:
@@ -158,3 +163,13 @@ The Reaper then has two options:
   on the next change (or restart).
 - The dead keep write access to their private channel (to talk to you). Skeletons can only react in the village
   chat. During the Ruthless Counselor's lockdown only private channels and the dead chat stay open.
+
+## 10. Ending and deleting a game
+
+- `/gm end_game <winner>` ends the game (also one that never started). The clock stops, but **everything is
+  kept**: state, snapshots, reports, the audit log and all channels - also across restarts.
+- `/game delete` removes the game and all its saved data for good, after you confirm with a button. With
+  `delete_channels: True` it also deletes the channels and categories the bot created for the game (never
+  channels you linked yourself or categories that already existed) and takes the Dead / Vengeful Spirit /
+  Skeleton roles off the players.
+- A new game can only be created once the previous one is deleted.

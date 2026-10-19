@@ -106,7 +106,7 @@ class EffectDelivery:
             channel = self._channel(guild, state.channels.get("announcements"))
             await channel.send(embed=embed(effect.title, effect.text, color_name=effect.color, footer=footer))
         elif isinstance(effect, VoteChannelPost):
-            channel = self._channel(guild, state.channels.get("votes"))
+            channel = self._channel(guild, state.channels.get("announcements"))
             await channel.send(embed=embed(effect.title, effect.text, color_name="gold", footer=footer))
         elif isinstance(effect, NewspaperPost):
             channel = self._channel(guild, state.channels.get("announcements"))

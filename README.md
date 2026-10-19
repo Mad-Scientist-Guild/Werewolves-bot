@@ -6,8 +6,9 @@ in real time. Days and nights are real days and nights. The rules are in [`Docs/
 - **Nothing is lost on a crash.** All game state lives in SQLite and is saved after every change. On restart the
   bot reloads every game, delivers anything still queued, re-syncs channel permissions and catches up on missed
   transitions.
-- **Everything is logged.** Every command, action, vote, transition, death and permission change goes to the
-  `events` table and to the GM `#mod-log` channel. Things that need a GM ping the GM role.
+- **Everything is logged.** Every action, vote, transition, death and permission change goes to the `events`
+  table and to the GM `#mod-log` channel, as do commands that were rejected or crashed. Things that need a GM
+  ping the GM role.
 - **Nights are previewed.** At 00:00 the bot resolves the night and posts a full report for the GMs. GMs can still
   adjust things, and the final result is applied at 08:00.
 
@@ -35,10 +36,13 @@ Tests: `python -m pytest`
 
 ## GM quick start
 
-1. `/game create`: creates the category, `#announcements`, `#votes`, `#mod-log` and the Dead / Vengeful Spirit /
-   Skeleton roles. Pass existing channels if you already have them.
+1. `/game create`: creates `#announcements` (also where vote results are posted), `#mod-log` and the Dead /
+   Vengeful Spirit / Skeleton roles. Pass existing channels if you already have them. Game channels are sorted into the categories
+   Important, General, Families, Factions, Roles and Game Masters (existing categories with those names are reused).
 2. Players `/game join` (or `/setup add_player`). Waiting-list players: `/setup backup add`.
-3. `/setup roles_add <role> [count]` until the role pool matches the player count (check with `/setup roles`).
+3. The role pool starts with the default setup: one of every role, three Brothers. Adjust it with
+   `/setup roles_add` / `/setup roles_remove` until it matches the player count (`/setup roles` shows it,
+   `/setup roles_default` resets it).
 4. `/setup families [size]` (move people with `/setup family_move`).
 5. `/setup assign preview`, then `/setup assign apply`.
 6. Optional: `/setup times`, `/setup timezone`, `/setup gm_role`, `/setup role_setting` (e.g. extra uses).
@@ -68,7 +72,8 @@ Every change re-runs the preview. If the 08:00 result differs from the last prev
 - `/gm set_role` / `/gm modifier` / `/gm group`
 - `/gm decide` (make a pending choice for someone)
 - `/gm clock pause|resume|advance|snapshots|rollback`
-- `/gm end_game`
+- `/gm end_game` (works before the start too; everything is kept until `/game delete`, which asks for
+  confirmation and can also remove the bot-made channels)
 
 A snapshot is taken before every transition, so `/gm clock rollback` can undo one. Discord messages that were
 already sent stay.

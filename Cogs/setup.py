@@ -104,6 +104,15 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             summary = _pool_summary(state)
         await reply(interaction, summary)
 
+    @app_commands.command(name="roles_default", description="Reset the role pool to the default setup")
+    async def roles_default(self, interaction: discord.Interaction) -> None:
+        async with runtime.games.mutate(interaction.guild_id) as state:
+            _setup_only(state.phase)
+            state.role_pool = flow.default_role_pool()
+            state.log("SETUP", "Role pool reset to the default setup.", actor=interaction.user.id)
+            summary = _pool_summary(state)
+        await reply_long(interaction, "Role pool", summary)
+
     @app_commands.command(name="roles", description="Show the role pool")
     async def roles(self, interaction: discord.Interaction) -> None:
         await reply(interaction, _pool_summary(runtime.games.get(interaction.guild_id).state))

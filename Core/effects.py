@@ -44,6 +44,7 @@ class Announcement(Effect):
 
 @dataclass
 class VoteChannelPost(Effect):
+    """Published vote results (posted in the announcements channel)."""
     text: str
     title: str = ""
 

@@ -1,7 +1,7 @@
 """/lynch - the daily lynch vote (and the Ruthless Counselor's second lynch).
 
 Votes are private until voting closes; then the full list is published in
-the votes channel. Every vote is logged for the GMs straight away."""
+the announcements channel. Every vote is logged for the GMs straight away."""
 from __future__ import annotations
 
 import discord

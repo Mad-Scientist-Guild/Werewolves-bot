@@ -169,6 +169,19 @@ def remove_modifier(state: GameState, player: Player, name: str, *, reason: str 
 
 # --- assignment & families ------------------------------------------------------
 
+# roles that appear more than once in the default setup
+DEFAULT_COUNTS = {"brother": 3}
+# registered roles that aren't part of the default setup (the plain Villager is filler)
+NOT_IN_DEFAULT = frozenset({"villager"})
+
+
+def default_role_pool() -> dict[str, int]:
+    """One of every role that can be dealt out, three Brothers."""
+    from Core.actor import ROLE_REGISTRY
+    return {name: DEFAULT_COUNTS.get(name, 1) for name, cls in sorted(ROLE_REGISTRY.items())
+            if cls.assignable and name not in NOT_IN_DEFAULT}
+
+
 def plan_assignment(state: GameState, rng_seed: int | None = None) -> dict[int, str]:
     pool = [name for name, count in sorted(state.role_pool.items()) for _ in range(count)]
     players = sorted(state.players)
@@ -284,8 +297,9 @@ def start_game(state: GameState, now: datetime) -> FlowResult:
 
 
 def end_game(state: GameState, winner: str | None, now: datetime) -> None:
-    if not state.active:
-        raise GameError("The game isn't running.")
+    """End the game. Also works before it started; all data is kept until /game delete."""
+    if state.phase is Phase.ENDED:
+        raise GameError("The game has already ended.")
     state.phase = Phase.ENDED
     state.winner = winner
     state.ended_at = now.isoformat()
