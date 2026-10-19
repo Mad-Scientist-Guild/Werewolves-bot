@@ -4,8 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>ec7bf577-20aa-4cda-98e7-1ad110167388</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>
-    </StartupFile>
+    <StartupFile>bot.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -13,6 +12,8 @@
     <Name>Werwolves-bot</Name>
     <RootNamespace>Werwolves-bot</RootNamespace>
     <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
+    <SuppressPackageInstallationPrompt>True</SuppressPackageInstallationPrompt>
+    <IsWindowsApplication>False</IsWindowsApplication>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -23,22 +24,124 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="bot.py" />
-    <Compile Include="Cogs\admin.py" />
-    <Compile Include="Cogs\example_cog.py" />
-    <Compile Include="Cogs\game_lifecycle.py" />
+    <Compile Include="Cogs\__init__.py" />
+    <Compile Include="Cogs\activity.py" />
+    <Compile Include="Cogs\game.py" />
+    <Compile Include="Cogs\gm.py" />
     <Compile Include="Cogs\lynch.py" />
     <Compile Include="Cogs\mayor.py" />
-    <Compile Include="Cogs\roster.py" />
+    <Compile Include="Cogs\player.py" />
+    <Compile Include="Cogs\realtime.py" />
     <Compile Include="Cogs\scheduler.py" />
-    <Compile Include="Cogs\settings.py" />
-    <Compile Include="config.py" />
-    <Compile Include="Core\game.py" />
-    <Compile Include="Core\helpers.py" />
-    <Compile Include="Core\models.py" />
-    <Compile Include="Roles\modifier.py" />
-    <Compile Include="Roles\roles.py" />
+    <Compile Include="Cogs\setup.py" />
+    <Compile Include="Core\__init__.py" />
+    <Compile Include="Core\abilities.py" />
+    <Compile Include="Core\access.py" />
+    <Compile Include="Core\actions.py" />
+    <Compile Include="Core\actor.py" />
+    <Compile Include="Core\clock.py" />
+    <Compile Include="Core\effects.py" />
+    <Compile Include="Core\errors.py" />
+    <Compile Include="Core\factions.py" />
+    <Compile Include="Core\flow.py" />
+    <Compile Include="Core\realtime.py" />
+    <Compile Include="Core\resolution.py" />
+    <Compile Include="Core\serialize.py" />
+    <Compile Include="Core\state.py" />
+    <Compile Include="Core\voting.py" />
     <Compile Include="Roles\__init__.py" />
+    <Compile Include="Roles\coven\__init__.py" />
+    <Compile Include="Roles\coven\_coven.py" />
+    <Compile Include="Roles\coven\curseweaver.py" />
+    <Compile Include="Roles\coven\diviner.py" />
+    <Compile Include="Roles\coven\enchantress.py" />
+    <Compile Include="Roles\coven\hag_mother.py" />
+    <Compile Include="Roles\lovers\__init__.py" />
+    <Compile Include="Roles\lovers\cupid.py" />
+    <Compile Include="Roles\lovers\lover.py" />
+    <Compile Include="Roles\modifiers\__init__.py" />
+    <Compile Include="Roles\modifiers\vengeful_spirit.py" />
+    <Compile Include="Roles\role.py" />
+    <Compile Include="Roles\undead\__init__.py" />
+    <Compile Include="Roles\undead\lich.py" />
+    <Compile Include="Roles\undead\skeleton.py" />
+    <Compile Include="Roles\undead\vampire.py" />
+    <Compile Include="Roles\villagers\__init__.py" />
+    <Compile Include="Roles\villagers\actor.py" />
+    <Compile Include="Roles\villagers\adopted_child.py" />
+    <Compile Include="Roles\villagers\brother.py" />
+    <Compile Include="Roles\villagers\fox.py" />
+    <Compile Include="Roles\villagers\gambler.py" />
+    <Compile Include="Roles\villagers\grave_robber.py" />
+    <Compile Include="Roles\villagers\insomniac.py" />
+    <Compile Include="Roles\villagers\locksmith.py" />
+    <Compile Include="Roles\villagers\monster_hunter.py" />
+    <Compile Include="Roles\villagers\old_hunter.py" />
+    <Compile Include="Roles\villagers\pacifist.py" />
+    <Compile Include="Roles\villagers\peeking_girl.py" />
+    <Compile Include="Roles\villagers\priest.py" />
+    <Compile Include="Roles\villagers\prophet.py" />
+    <Compile Include="Roles\villagers\ruthless_counselor.py" />
+    <Compile Include="Roles\villagers\seer.py" />
+    <Compile Include="Roles\villagers\silver_angel.py" />
+    <Compile Include="Roles\villagers\spiritualist.py" />
+    <Compile Include="Roles\villagers\telepath.py" />
+    <Compile Include="Roles\villagers\trapmaker.py" />
+    <Compile Include="Roles\villagers\undertaker.py" />
+    <Compile Include="Roles\villagers\vigilante.py" />
+    <Compile Include="Roles\villagers\village_slut.py" />
+    <Compile Include="Roles\villagers\villager.py" />
+    <Compile Include="Roles\villagers\wanderer.py" />
+    <Compile Include="Roles\villagers\witch.py" />
+    <Compile Include="Roles\werewolves\__init__.py" />
+    <Compile Include="Roles\werewolves\_pack.py" />
+    <Compile Include="Roles\werewolves\ancient_wolf.py" />
+    <Compile Include="Roles\werewolves\apprentice_wolf.py" />
+    <Compile Include="Roles\werewolves\bloodhound.py" />
+    <Compile Include="Roles\werewolves\cultist.py" />
+    <Compile Include="Roles\werewolves\cunning_wolf.py" />
+    <Compile Include="Roles\werewolves\feral_wolf.py" />
+    <Compile Include="Roles\werewolves\normal_wolf.py" />
+    <Compile Include="Roles\werewolves\rabid_wolf.py" />
+    <Compile Include="Roles\werewolves\shadow_wolf.py" />
+    <Compile Include="Roles\werewolves\turned_wolf.py" />
+    <Compile Include="Roles\werewolves\werewolf.py" />
+    <Compile Include="Services\__init__.py" />
+    <Compile Include="Services\audit.py" />
+    <Compile Include="Services\channels.py" />
+    <Compile Include="Services\discord_utils.py" />
+    <Compile Include="Services\effects.py" />
+    <Compile Include="Services\game_service.py" />
+    <Compile Include="Services\role_commands.py" />
+    <Compile Include="Services\runtime.py" />
+    <Compile Include="Services\views.py" />
+    <Compile Include="Services\worker.py" />
+    <Compile Include="Storage\__init__.py" />
+    <Compile Include="Storage\codec.py" />
+    <Compile Include="Storage\db.py" />
+    <Compile Include="bot.py" />
+    <Compile Include="config.py" />
+    <Compile Include="tests\__init__.py" />
+    <Compile Include="tests\builder.py" />
+    <Compile Include="tests\conftest.py" />
+    <Compile Include="tests\test_docs.py" />
+    <Compile Include="tests\test_engine_core.py" />
+    <Compile Include="tests\test_flow.py" />
+    <Compile Include="tests\test_services.py" />
+    <Compile Include="tests\test_special.py" />
+    <Compile Include="tests\test_undead_coven.py" />
+    <Compile Include="tests\test_villagers.py" />
+    <Compile Include="tests\test_werewolves.py" />
+    <Compile Include="tools\__init__.py" />
+    <Compile Include="tools\generate_docs.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="requirements.txt" />
+    <Content Include=".env.example" />
+    <Content Include="pytest.ini" />
+    <Content Include="README.md" />
+    <Content Include="Docs\GM manual.md" />
+    <Content Include="Docs\Player commands.md" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="env\">
@@ -54,8 +157,17 @@
   <ItemGroup>
     <Folder Include="Cogs\" />
     <Folder Include="Core\" />
-    <Folder Include="Utility\" />
     <Folder Include="Roles\" />
+    <Folder Include="Roles\coven\" />
+    <Folder Include="Roles\lovers\" />
+    <Folder Include="Roles\modifiers\" />
+    <Folder Include="Roles\undead\" />
+    <Folder Include="Roles\villagers\" />
+    <Folder Include="Roles\werewolves\" />
+    <Folder Include="Services\" />
+    <Folder Include="Storage\" />
+    <Folder Include="tests\" />
+    <Folder Include="tools\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

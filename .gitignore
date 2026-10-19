@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Werewolves bot runtime data
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/

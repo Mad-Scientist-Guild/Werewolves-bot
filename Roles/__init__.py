@@ -1,8 +1,13 @@
+"""Role plug-ins.
+
+Every module below this package (recursively) is imported once, which runs
+its @register_role / @register_modifier decorators and defines its command
+cog. Adding a role = adding a file; removing a role = deleting its file.
+Modules whose name starts with an underscore are imported too (shared
+helpers), but are not expected to define roles.
+"""
 import importlib
 import pkgutil
 
-# Importing each submodule is enough to make its @register_role calls run
-# nothing needs to be re-exported from here
-# Callers do `from roles.role import ROLE_REGISTRY` (or wherever ROLE_REGISTRY ends up) after this package has been imported once
-for _, module_name, _ in pkgutil.iter_modules(__path__):
-    importlib.import_module(f"{__name__}.{module_name}")
+for _module in pkgutil.walk_packages(__path__, prefix=f"{__name__}."):
+    importlib.import_module(_module.name)
