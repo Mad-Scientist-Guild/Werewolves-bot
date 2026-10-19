@@ -11,10 +11,19 @@ from typing import Any, Callable
 from Core.serialize import dump, load
 from Core.state import GameState
 
-STATE_VERSION = 1
+STATE_VERSION = 2
+
+
+def _v1_categories(data: dict[str, Any]) -> dict[str, Any]:
+    """v1 kept one flat list of categories; v2 keeps them per kind."""
+    old = data.get("categories") or []
+    return {**data, "categories": {"legacy": old} if isinstance(old, list) and old else {}}
+
 
 # version -> function upgrading a raw state dict from that version to version + 1
-MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    1: _v1_categories,
+}
 
 
 def encode(state: GameState) -> str:

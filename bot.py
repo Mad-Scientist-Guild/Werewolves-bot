@@ -110,10 +110,6 @@ class WerewolvesBot(commands.Bot):
         for handle in runtime.games.all():
             runtime.worker.wake(handle)   # re-sync channels and deliver anything left in the outbox
 
-    async def on_app_command_completion(self, interaction: discord.Interaction,
-                                        command: app_commands.Command | app_commands.ContextMenu) -> None:
-        await self._log_command(interaction, command.qualified_name, "COMMAND", "")
-
     async def _log_command(self, interaction: discord.Interaction, name: str, category: str, suffix: str) -> None:
         if interaction.guild_id is None:
             return

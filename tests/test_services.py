@@ -127,3 +127,54 @@ async def test_full_day_cycle_through_the_service(service):
     await fresh.load_all()
     assert fresh.get(1).state.phase is Phase.NIGHT
     assert fresh.get(1).state.ballots["wolves"].is_open
+
+
+async def test_new_game_starts_with_the_default_role_pool(service):
+    from Core.actor import ROLE_REGISTRY
+    handle = await service.create(1)
+    pool = handle.state.role_pool
+    assert pool["brother"] == 3 and pool["seer"] == 1 and pool["rabid_wolf"] == 1
+    assert "villager" not in pool and "werewolf" not in pool       # filler / not assignable
+    assert set(pool) == {n for n, c in ROLE_REGISTRY.items() if c.assignable and n != "villager"}
+
+
+def test_v1_state_migrates_categories():
+    import json
+    from Storage.codec import decode
+    from Core.state import GameState
+    from Core.serialize import dump
+    raw = dump(GameState(guild_id=1))
+    raw["categories"] = [111, 222]
+    state = decode(json.dumps(raw), version=1)
+    assert state.categories == {"legacy": [111, 222]}
+
+
+def test_channels_go_into_the_right_categories():
+    from Core.state import GroupKind
+    from Services.channels import FIXED_CHANNEL_CATEGORY, category_key
+    assert category_key(GroupKind.VILLAGE) == category_key(GroupKind.DEAD) == "general"
+    assert category_key(GroupKind.FAMILY) == "families"
+    assert category_key(GroupKind.PRIVATE) == "roles"
+    assert {category_key(k) for k in (GroupKind.WOLVES, GroupKind.COVEN, GroupKind.LOVERS)} == {"factions"}
+    assert FIXED_CHANNEL_CATEGORY == {"announcements": "important", "mod_log": "gm"}
+
+
+async def test_end_before_start_keeps_everything_until_deleted(service):
+    from datetime import datetime
+    from Core.errors import GameAlreadyActive, NoActiveGame
+    handle = await service.create(1)
+    async with service.mutate(1) as state:
+        flow.add_player(state, 10, "p0")
+        flow.end_game(state, None, datetime(2026, 10, 5, 10, 0, tzinfo=TZ))      # never started
+    with pytest.raises(GameAlreadyActive, match="delete"):
+        await service.create(1)
+    fresh = GameService(service.db)
+    await fresh.load_all()                                                    # survives a restart
+    assert fresh.get(1).state.phase is Phase.ENDED and 10 in fresh.get(1).state.players
+    assert await service.db.recent_events(handle.game_id)
+    await fresh.delete(1, by=99)
+    with pytest.raises(NoActiveGame):
+        fresh.get(1)
+    assert await service.db.recent_events(handle.game_id) == []
+    assert await service.db.active_games() == []
+    await fresh.create(1)                                                     # a new game is possible again

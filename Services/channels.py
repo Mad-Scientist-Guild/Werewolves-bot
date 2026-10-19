@@ -23,8 +23,28 @@ from Storage.db import Database
 
 log = logging.getLogger("werewolves.channels")
 
-CATEGORY_NAME = "XP Werewolves"
 CATEGORY_LIMIT = 50
+
+# category key -> (name, visible to everyone)
+CATEGORIES = {
+    "important": ("Important", True),
+    "general": ("General", False),
+    "families": ("Families", False),
+    "factions": ("Factions", False),
+    "roles": ("Roles", False),
+    "gm": ("Game Masters", False),
+}
+FIXED_CHANNEL_CATEGORY = {"announcements": "important", "mod_log": "gm"}
+
+
+def category_key(kind: GroupKind) -> str:
+    if kind in (GroupKind.VILLAGE, GroupKind.DEAD):
+        return "general"
+    if kind is GroupKind.FAMILY:
+        return "families"
+    if kind is GroupKind.PRIVATE:
+        return "roles"
+    return "factions"
 
 ACCESS_OVERWRITES: dict[Access, discord.PermissionOverwrite] = {
     Access.WRITE: discord.PermissionOverwrite(
@@ -58,7 +78,7 @@ PUBLIC_ROLE_NAMES = {
     PublicStatus.SKELETON: "Skeleton",
 }
 
-# creation order inside the category
+# creation order (within each category)
 KIND_ORDER = [
     GroupKind.VILLAGE, GroupKind.DEAD, GroupKind.FAMILY, GroupKind.WOLVES, GroupKind.UNDEAD,
     GroupKind.SKELETONS, GroupKind.LOVERS, GroupKind.BROTHERS, GroupKind.COVEN, GroupKind.SPIRIT_LINE,
@@ -96,34 +116,43 @@ class ChannelManager:
                 overwrites[member] = ACCESS_OVERWRITES[access]
         return overwrites
 
-    async def _category(self, guild: discord.Guild, handle: GameHandle) -> discord.CategoryChannel:
+    async def _category(self, guild: discord.Guild, handle: GameHandle, key: str) -> discord.CategoryChannel:
+        """The category for this kind of channel. The server is dedicated to the
+        game, so an existing category with the right name is reused; a full one
+        (50 channels) gets an overflow category ("Roles 2")."""
         state = handle.state
-        for category_id in state.categories:
+        name, public = CATEGORIES[key]
+        known = state.categories.get(key, [])
+        for category_id in known:
             category = guild.get_channel(category_id)
             if isinstance(category, discord.CategoryChannel) and len(category.channels) < CATEGORY_LIMIT:
                 return category
-        number = len(state.categories) + 1
-        name = CATEGORY_NAME if number == 1 else f"{CATEGORY_NAME} {number}"
-        category = await guild.create_category(name, overwrites=self._base_overwrites(guild, state),
-                                               reason="Werewolves game channels")
+        existing = discord.utils.get(guild.categories, name=name) if not known else None
+        if existing is not None and len(existing.channels) < CATEGORY_LIMIT:
+            category, action = existing, "Using existing"
+        else:
+            label = name if not known else f"{name} {len(known) + 1}"
+            category = await guild.create_category(label, overwrites=self._base_overwrites(guild, state, public=public),
+                                                   reason="Werewolves game channels")
+            action = "Created"
         async with self.games.mutate(guild.id) as mutable:
-            mutable.categories.append(category.id)
-            mutable.log("CHANNEL", f"Created category {name}.")
+            if action == "Created":
+                mutable.data.setdefault("created_categories", []).append(category.id)
+            mutable.categories.setdefault(key, []).append(category.id)
+            mutable.log("CHANNEL", f"{action} category {category.name}.")
         return category
 
     # --- setup -----------------------------------------------------------------
     async def setup_base(self, guild: discord.Guild, handle: GameHandle, *,
                          announcements: discord.TextChannel | None = None,
-                         votes: discord.TextChannel | None = None,
                          mod_log: discord.TextChannel | None = None) -> list[str]:
         """Category, the fixed public channels, the mod log and the public
         Discord roles. Existing channels can be passed in instead."""
         done: list[str] = []
         state = handle.state
-        category = await self._category(guild, handle)
         found: dict[str, int] = {}
-        for key, given, public in (("mod_log", mod_log, False), ("announcements", announcements, True),
-                                   ("votes", votes, True)):
+        created: list[int] = []
+        for key, given, public in (("mod_log", mod_log, False), ("announcements", announcements, True)):
             if given is not None:
                 found[key] = given.id
                 continue
@@ -131,9 +160,11 @@ class ChannelManager:
             if existing is not None:
                 continue
             overwrites = self._base_overwrites(guild, state, public=public)
+            category = await self._category(guild, handle, FIXED_CHANNEL_CATEGORY[key])
             channel = await guild.create_text_channel(
                 key.replace("_", "-"), category=category, overwrites=overwrites, reason="Werewolves game setup")
             found[key] = channel.id
+            created.append(channel.id)
             done.append(f"created #{channel.name}")
 
         roles: dict[str, int] = {}
@@ -149,6 +180,8 @@ class ChannelManager:
         async with self.games.mutate(guild.id) as mutable:
             mutable.channels.update(found)
             mutable.discord_roles.update(roles)
+            # remembered so /game delete only removes channels the bot made itself
+            mutable.data.setdefault("created_channels", []).extend(created)
             if done or found:
                 mutable.log("CHANNEL", "Base setup: " + (", ".join(done) or "linked existing channels"))
         return done
@@ -164,7 +197,7 @@ class ChannelManager:
         created: dict[str, int] = {}
         recreated: list[str] = []
         for group in missing:
-            category = await self._category(guild, handle)
+            category = await self._category(guild, handle, category_key(group.kind))
             channel = await guild.create_text_channel(
                 slug(group.name) or group.key, category=category, topic=group.topic or None,
                 overwrites=self._group_overwrites(guild, state, group), reason="Werewolves game channel",
@@ -181,6 +214,33 @@ class ChannelManager:
                 mutable.log("CHANNEL", "These channels had disappeared and were recreated (old messages are in the "
                             "deleted channel's audit trail only): " + ", ".join(recreated), alert=True)
         return len(created)
+
+    # --- deleting a game ----------------------------------------------------------
+    async def remove_game(self, guild: discord.Guild, state: GameState) -> list[str]:
+        """Delete the channels the bot created for this game (group channels,
+        and the fixed channels / categories it created itself - never ones a
+        GM linked or that existed before), and take the public roles off the
+        players. Only used by /game delete."""
+        removed: list[str] = []
+        channel_ids = [g.channel_id for g in state.groups.values() if g.channel_id]
+        channel_ids += state.data.get("created_channels", [])
+        for channel_id in channel_ids:
+            channel = guild.get_channel(channel_id)
+            if channel is not None:
+                await channel.delete(reason="Werewolves game deleted")
+                removed.append(f"#{channel.name}")
+        for category_id in state.data.get("created_categories", []):
+            category = guild.get_channel(category_id)
+            if isinstance(category, discord.CategoryChannel) and not category.channels:
+                await category.delete(reason="Werewolves game deleted")
+                removed.append(category.name)
+        roles = [guild.get_role(r) for r in state.discord_roles.values()]
+        roles = [r for r in roles if r is not None]
+        for player in state.players.values():
+            member = guild.get_member(player.user_id)
+            if member is not None and any(r in member.roles for r in roles):
+                await member.remove_roles(*roles, reason="Werewolves game deleted")
+        return removed
 
     # --- reconciliation --------------------------------------------------------
     async def sync(self, guild: discord.Guild, handle: GameHandle) -> int:

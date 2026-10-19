@@ -1,15 +1,17 @@
 """SQLite persistence.
 
 Tables
-  games      one row per game; the full GameState as JSON, rewritten atomically
+  games      one row per game (one per server, kept after it ends until /game delete);
+             the full GameState as JSON, rewritten atomically
   snapshots  the state before every phase transition (GM rollback)
   reports    resolution reports (night previews/finals, dusk...)
   events     append-only audit log; `posted` tracks delivery to the mod channel
   outbox     effects waiting to be delivered to Discord
 
 A game's state, its new log entries, effects and reports are written in ONE
-transaction, so a crash can never leave them out of step. Nothing is ever
-deleted - finished games, delivered effects and posted events are kept.
+transaction, so a crash can never leave them out of step. Nothing is deleted
+while a game exists - finished games, delivered effects and posted events are
+kept until a GM deletes the game with /game delete.
 """
 from __future__ import annotations
 
@@ -165,7 +167,7 @@ class Database:
 
     async def active_games(self) -> list[GameRow]:
         async with self.db.execute(
-            "SELECT id, guild_id, status, state, state_version FROM games WHERE status != 'ended' ORDER BY id"
+            "SELECT id, guild_id, status, state, state_version FROM games ORDER BY id"
         ) as cursor:
             rows = await cursor.fetchall()
         return [GameRow(r["id"], r["guild_id"], r["status"], r["state"], r["state_version"]) for r in rows]
@@ -218,6 +220,18 @@ class Database:
         except BaseException:
             await db.rollback()
             raise
+
+    async def delete_game(self, game_id: int) -> None:
+        async with self.write_lock:
+            try:
+                await self.db.execute("BEGIN")
+                for table in ("snapshots", "reports", "events", "outbox"):
+                    await self.db.execute(f"DELETE FROM {table} WHERE game_id = ?", (game_id,))
+                await self.db.execute("DELETE FROM games WHERE id = ?", (game_id,))
+                await self.db.commit()
+            except BaseException:
+                await self.db.rollback()
+                raise
 
     # --- events ----------------------------------------------------------------
     async def add_event(self, **kwargs: Any) -> None:

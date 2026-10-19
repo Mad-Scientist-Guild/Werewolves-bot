@@ -369,7 +369,7 @@ class GameState:
     backups: list[int] = field(default_factory=list)
     groups: dict[str, Group] = field(default_factory=dict)
     channels: dict[str, int] = field(default_factory=dict)       # announcements, votes, mod_log
-    categories: list[int] = field(default_factory=list)
+    categories: dict[str, list[int]] = field(default_factory=dict)   # category key -> ids (overflow adds more)
     discord_roles: dict[str, int] = field(default_factory=dict)  # PublicStatus value -> role id
 
     settings: Settings = field(default_factory=Settings)

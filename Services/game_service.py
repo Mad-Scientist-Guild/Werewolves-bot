@@ -83,9 +83,13 @@ class GameService:
 
     async def create(self, guild_id: int) -> GameHandle:
         existing = self.handles.get(guild_id)
-        if existing is not None and existing.state.phase is not Phase.ENDED:
+        if existing is not None:
+            if existing.state.phase is Phase.ENDED:
+                raise GameAlreadyActive("The last game in this server has ended but is still saved. Delete it with "
+                                        "`/game delete` before creating a new one.")
             raise GameAlreadyActive("A game is already running in this server.")
-        state = GameState(guild_id=guild_id)
+        from Core.flow import default_role_pool
+        state = GameState(guild_id=guild_id, role_pool=default_role_pool())
         game_id = await self.db.create_game(guild_id, encode(state), STATE_VERSION)
         state.game_id = game_id
         handle = GameHandle(game_id, state)
@@ -146,6 +150,14 @@ class GameService:
                 raise
         self._notify(handle)
         return restored
+
+    async def delete(self, guild_id: int, *, by: int) -> None:
+        """Remove the game and all of its saved data (/game delete, after confirmation)."""
+        handle = self.get(guild_id)
+        async with handle.lock:
+            await self.db.delete_game(handle.game_id)
+            self.handles.pop(guild_id, None)
+        log.warning("Game %s of guild %s deleted by user %s", handle.game_id, guild_id, by)
 
     def _notify(self, handle: GameHandle) -> None:
         for listener in self.listeners:
