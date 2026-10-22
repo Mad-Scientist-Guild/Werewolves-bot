@@ -14,6 +14,7 @@
     <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
     <SuppressPackageInstallationPrompt>True</SuppressPackageInstallationPrompt>
     <IsWindowsApplication>False</IsWindowsApplication>
+    <TestFramework>Pytest</TestFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -157,6 +158,7 @@
   <ItemGroup>
     <Folder Include="Cogs\" />
     <Folder Include="Core\" />
+    <Folder Include="Docs\" />
     <Folder Include="Roles\" />
     <Folder Include="Roles\coven\" />
     <Folder Include="Roles\lovers\" />

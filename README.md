@@ -182,5 +182,9 @@ All roles from the rules document are implemented, each with tests for its speci
 
 Documentation:
 - [`Docs/GM manual.md`](Docs/GM%20manual.md) - running a game.
+- [`Docs/Developer guide - adding a role.md`](Docs/Developer%20guide%20-%20adding%20a%20role.md) - writing a role:
+  requirements, the resolution pipeline, every hook and helper, a worked example.
+- [`Docs/Developer guide - architecture and data.md`](Docs/Developer%20guide%20-%20architecture%20and%20data.md) -
+  layers, the state dataclasses, serialisation, the database and the life of a change, with diagrams.
 - [`Docs/Player commands.md`](Docs/Player%20commands.md) - the player guide. It's generated, so run
   `python tools/generate_docs.py` after changing roles.
