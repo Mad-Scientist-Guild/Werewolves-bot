@@ -9,7 +9,6 @@ class Telepath(Role):
     name = "telepath"
     display = "Telepath"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a day (08:00-00:00) you can send an anonymous message of at most 20 words to a living player. They "
         "receive exactly your message through a Game Master and can send one reply (also 20 words at most)."

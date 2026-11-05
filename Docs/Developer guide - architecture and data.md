@@ -37,7 +37,7 @@ flowchart TB
     end
     subgraph Core ["Core/ - pure game engine (no Discord)"]
         ST["state.py dataclasses"]
-        EN["actions, resolution, flow,<br/>voting, access, clock, realtime"]
+        EN["actions, resolution, players, lifecycle,<br/>transitions, lynch, decisions, gm_tools,<br/>voting, access, clock, realtime"]
         RL["Roles/* Role and Modifier classes"]
     end
     subgraph Storage ["Storage/"]
@@ -298,8 +298,8 @@ sequenceDiagram
     GS->>DB: commit_game(state + events + effects + reports)
     GS-->>RC: (lock released)
     RC-->>P: ephemeral confirmation
-    GS-)W: notify(handle)
-    W->>CM: ensure_group_channels
+    GS-)W: on_change(handle) = GameWorker.wake
+    W->>CM: ensure_chat_channels (any chat without a channel)
     W->>ED: deliver(outbox)
     ED->>DB: mark delivered
     W->>CM: sync permissions and public roles
@@ -325,7 +325,7 @@ sequenceDiagram
 sequenceDiagram
     participant S as Scheduler (every 30 s)
     participant GS as GameService
-    participant FL as Core.flow
+    participant FL as Core.transitions
     participant RE as Resolution
     participant DB as Database
     S->>S: now >= state.next_transition.at ?
@@ -336,7 +336,7 @@ sequenceDiagram
         GS->>FL: run_transition(state, NIGHT_LOCK, scheduled)
         FL->>FL: phase = SLEEP, close wolf vote
         FL->>RE: preview_night(deepcopy of state, stored seed)
-        RE-->>FL: Outcome(report)
+        RE-->>FL: report
         FL->>FL: next_transition = next after the scheduled time
         GS->>DB: commit (state, snapshot, preview report)
     end
@@ -344,7 +344,7 @@ sequenceDiagram
     S->>GS: mutate(snapshot="before morning (day 3)")
     GS->>FL: run_transition(MORNING)
     FL->>RE: resolve_night(real state, same seed)
-    RE-->>FL: deaths, messages (effects), report
+    RE-->>FL: report (deaths applied, messages emitted)
     FL->>FL: day += 1, phase = DAY, expire conditions
     S->>S: final report != last preview? then alert the GMs
     GS->>DB: commit
@@ -355,8 +355,8 @@ sequenceDiagram
   pauses, and a GM decides (`/gm clock resume`).
 - The transition kinds and their order are in [Core/clock.py](../Core/clock.py): MORNING → NEWSPAPER → DUSK →
   (SECOND_LYNCH_END) → NIGHT_LOCK.
-- What each transition does is in [Core/flow.py](../Core/flow.py) (`_morning`, `_newspaper`, `_dusk`,
-  `_second_lynch_end`, `_night_lock`).
+- What each transition does is in [Core/transitions.py](../Core/transitions.py) (`_morning`, `_newspaper`,
+  `_dusk`, `_night_lock`); the lynch parts of dusk and the second lynch are in [Core/lynch.py](../Core/lynch.py).
 - A transition that crashes is rolled back, and the clock pauses until a GM fixes it.
 
 ---
@@ -371,11 +371,12 @@ The engine asks for side effects by emitting `Effect` dataclasses ([Core/effects
 | `ChatMessage` | embed in a chat's channel |
 | `Announcement`, `VoteResults`, `NewspaperPost` | the announcements channel |
 | `RoleCard` | role card in the private channel |
-| `CreateChannel` | creates the channel for a chat made during the game |
 | `DecisionPrompt` | select menu for the chooser (or in #mod-log for the GMs) |
 | `QuestionPrompt` | yes/no buttons (dead chat, or a private channel for the Open Book) |
 | `TelepathPrompt` | message with a Reply button |
-| `DirectMessage` | a Discord DM |
+
+Channels are not an effect: before delivering, the worker creates a Discord channel for every chat that
+doesn't have one yet (chats made mid-game, like a merged coven chat, get theirs this way).
 
 **Delivery.**
 - `EffectDelivery` delivers outbox rows in order.
@@ -429,10 +430,10 @@ names are reused. Channels are never renamed.
 |---|---|---|
 | `ROLE_REGISTRY` / `MODIFIER_REGISTRY` | `Core/actor.py` | `@register_role` / `@register_modifier` |
 | `FACTIONS` | `Core/factions.py` | `register_faction(Faction(...))`, with the win check |
-| `GROUP_DEFS` | `Core/flow.py` | `register_chat(key, kind, channel_name)` |
+| `CHAT_DEFS` | `Core/players.py` | `register_chat(key, kind, channel_name)` |
 | `CONVERSIONS` | `Core/resolution.py` | `register_conversion(kind, fn)` |
 | `PREPARE_HOOKS` / `FINAL_HOOKS` | `Core/resolution.py` | `register_prepare_hook` / `register_final_hook` |
-| `DECISION_HANDLERS` | `Core/flow.py` | `DECISION_HANDLERS["kind"] = fn` |
+| `DECISION_HANDLERS` | `Core/decisions.py` | `DECISION_HANDLERS["kind"] = fn` (the lynch tiebreaks in `Core/lynch.py`) |
 | `COMMAND_COGS` / `COMMAND_GROUPS` | `Services/role_commands.py` | subclassing `RoleCommands` |
 | `DYNAMIC_ITEMS` | `Services/views.py` | the tuple at the end of the file |
 | Polymorphic families (`actor`, `effect`) | `Core/serialize.py` | subclassing `Polymorphic` |
@@ -448,7 +449,7 @@ All of these are filled at import time. Importing `Roles` (which `bot.py` and th
 | add or remove a role | a file in `Roles/<faction>/` (see the role guide) |
 | add a game-wide night rule | a prepare or final hook in a `Roles/.../_something.py` module |
 | add a faction | `register_faction` in `Core/factions.py` + roles with that `faction` |
-| add a transition or change the daily rhythm | `Core/clock.py` (`TransitionKind`, `allowed_next`) + a handler in `Core/flow.py` |
+| add a transition or change the daily rhythm | `Core/clock.py` (`TransitionKind`, `allowed_next`) + a handler in `Core/transitions.py` |
 | add a kind of message or Discord side effect | an `Effect` subclass in `Core/effects.py` + a branch in `EffectDelivery.apply` |
 | add a GM tool | a command in `Cogs/gm.py` (watch the 25-subcommand limit; there's a `clock` subgroup) |
 | change who sees which channel | `Core/access.py` |

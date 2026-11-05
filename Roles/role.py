@@ -2,6 +2,9 @@
 
     from Roles.role import *
 
+Every public name imported below is exported - add an import here to make
+something available to all roles.
+
 See Roles/villagers/silver_angel.py for a complete, commented example.
 """
 from dataclasses import field
@@ -22,10 +25,10 @@ from Core.actor import (
 from Core.effects import PrivateMessage, RoleCard
 from Core.errors import GameError
 from Core.factions import COVEN, EVIL_FACTIONS, LOVERS, NO_FACTION, UNDEAD, VILLAGERS, WEREWOLVES, faction_display
-from Core.flow import (
+from Core.players import (
+    add_condition,
     add_modifier,
     adopt_role,
-    add_condition,
     family_members,
     join_chat,
     register_chat,
@@ -45,16 +48,4 @@ from Core.state import (
     Condition,
     SubmittedAction,
 )
-from Services.role_commands import RoleCommands, role_autocomplete
-
-__all__ = [
-    "field", "discord", "app_commands",
-    "Ability", "P", "Param", "ParamKind", "Priority", "Timing",
-    "MODIFIER_REGISTRY", "ROLE_REGISTRY", "RoleBase", "Modifier", "Role", "register_modifier", "register_role",
-    "GameError", "PrivateMessage", "RoleCard",
-    "COVEN", "EVIL_FACTIONS", "LOVERS", "NO_FACTION", "UNDEAD", "VILLAGERS", "WEREWOLVES", "faction_display",
-    "add_modifier", "adopt_role", "add_condition", "family_members", "join_chat", "register_chat", "remove_modifier", "seed", "set_role",
-    "CONVERSIONS", "Attack", "Resolution", "Visit", "register_conversion",
-    "DeathRecord", "GameState", "ChatKind", "LifeState", "Phase", "Player", "PublicRole", "Condition", "SubmittedAction",
-    "RoleCommands", "role_autocomplete",
-]
+from Services.role_commands import CancelCommand, RoleCommands, role_autocomplete

@@ -6,7 +6,6 @@ class Locksmith(Role):
     name = "locksmith"
     display = "Locksmith"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a night you can lock someone's house (a house is a whole family; your own is allowed). Nobody can "
         "enter a locked house - not Villagers, Werewolves, Undead or Coven - and nobody inside can use powers that "
@@ -51,12 +50,8 @@ class Locksmith(Role):
                 visit.blocked, visit.reason = True, reason
 
 
-class LocksmithCommands(RoleCommands, group_name="locksmith", source="locksmith"):
+class LocksmithCommands(RoleCommands, CancelCommand, group_name="locksmith", source="locksmith"):
     @app_commands.command(name="lock", description="Lock a player's house (their whole family) tonight")
     @app_commands.describe(target="Whose house to lock (yours is allowed)")
     async def lock(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "lock", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's lock")
-    async def cancel_lock(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "lock")

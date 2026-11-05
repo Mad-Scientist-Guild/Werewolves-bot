@@ -6,7 +6,6 @@ class Fox(Role):
     name = "fox"
     display = "Fox"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a night you can point at three people. If at least one of them is not a Villager, you're told so. "
         "If all three are Villagers, you're told that too - and you lose your ability for the rest of the game."
@@ -40,12 +39,8 @@ class Fox(Role):
         ctx.commit(lambda: setattr(self, "active", False))
 
 
-class FoxCommands(RoleCommands, group_name="fox", source="fox"):
+class FoxCommands(RoleCommands, CancelCommand, group_name="fox", source="fox"):
     @app_commands.command(name="sniff", description="Point at three players: is any of them not a villager?")
     async def sniff(self, interaction: discord.Interaction, first: discord.Member, second: discord.Member,
                     third: discord.Member) -> None:
         await self.use(interaction, "sniff", first=first, second=second, third=third)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's sniffing")
-    async def cancel_sniff(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "sniff")

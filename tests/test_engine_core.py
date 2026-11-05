@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from Core import flow, voting
+from Core import actions, decisions, lynch, players, voting
 from Core.access import Access, player_access
 from Core.actor import MODIFIER_REGISTRY, ROLE_REGISTRY
 from Core.clock import TransitionKind, next_transition
@@ -30,7 +30,7 @@ def test_every_role_and_modifier_round_trips():
     g.start()
     first = g.state.players[g.id("p_villager")]
     for name in sorted(MODIFIER_REGISTRY):
-        flow.add_modifier(g.state, first, name)
+        players.add_modifier(g.state, first, name)
     text = encode(g.state)
     restored = decode(text)
     assert encode(restored) == text
@@ -125,10 +125,10 @@ def test_preview_matches_final_and_changes_nothing():
     g = basic_game()
     g.dusk()
     g.wolf_vote("w1", "v1"); g.wolf_vote("w2", "v1")
-    preview = g.lock().preview
+    preview = g.lock().reports[0][1]
     assert g.alive("v1")                       # preview didn't kill anyone
     final = g.morning().reports[0][1]
-    assert preview.report == final
+    assert preview == final
     assert not g.alive("v1")
 
 
@@ -168,7 +168,7 @@ def test_grave_robber_reads_state_from_before_the_moment():
 
     def swap(ctx):
         if ctx.kind == "night":
-            ctx.commit(lambda: flow.set_role(ctx.state, ctx.state.player(g.id("angel")), "villager"))
+            ctx.commit(lambda: players.set_role(ctx.state, ctx.state.player(g.id("angel")), "villager"))
 
     register_prepare_hook(swap)
     try:
@@ -252,12 +252,12 @@ def test_mayor_picks_when_their_vote_is_outside_the_tie():
     g.vote("w1", "v1"); g.vote("w2", "v1"); g.vote("w3", "v2"); g.vote("robber", "v2"); g.vote("angel", "cult")
     g.dusk()
     assert g.alive("v1") and g.alive("v2")
-    decision = flow.open_decisions(g.state)[0]
+    decision = decisions.open_decisions(g.state)[0]
     assert decision.chooser == g.id("angel") and sorted(decision.options) == sorted([g.id("v1"), g.id("v2")])
     assert any(isinstance(e, DecisionPrompt) for e in g.state.pending_effects)
     with pytest.raises(GameError):
-        flow.resolve_decision(g.state, decision.id, g.id("v1"), by=g.id("w1"))   # not the mayor
-    flow.resolve_decision(g.state, decision.id, g.id("v1"), by=g.id("angel"))
+        decisions.resolve_decision(g.state, decision.id, g.id("v1"), by=g.id("w1"))   # not the mayor
+    decisions.resolve_decision(g.state, decision.id, g.id("v1"), by=g.id("angel"))
     assert not g.alive("v1")
 
 
@@ -271,15 +271,15 @@ def test_skeletons_and_dead_cannot_vote():
 def test_second_lynch_counselor_picks_on_tie():
     g = basic_game(); to_day_two(g)
     g.dusk()
-    flow._open_second_lynch(g.state, g.id("angel"))
+    lynch.open_second_lynch(g.state, g.id("angel"))
     assert g.state.lockdown
     g.vote("w1", "v1", voting.LYNCH2); g.vote("w2", "v2", voting.LYNCH2)
     with pytest.raises(GameError):
         g.vote("w3", None, voting.LYNCH2)     # no abstaining
     g.second_lynch_end()
-    decision = flow.open_decisions(g.state)[0]
+    decision = decisions.open_decisions(g.state)[0]
     assert decision.kind == "lynch2_tiebreak" and decision.chooser == g.id("angel")
-    flow.resolve_decision(g.state, decision.id, g.id("v2"), by=g.id("angel"))
+    decisions.resolve_decision(g.state, decision.id, g.id("v2"), by=g.id("angel"))
     assert not g.alive("v2") and not g.state.lockdown
 
 
@@ -346,3 +346,13 @@ def test_clock_catch_up_follows_scheduled_times():
     after = datetime(2026, 10, 6, 0, 0, tzinfo=TZ)
     nt = next_transition(g.state, after)
     assert nt.kind == "morning" and nt.at.startswith("2026-10-06T08:00")
+
+
+def test_cancel_without_naming_the_ability():
+    g = basic_game()
+    g.dusk()
+    with pytest.raises(GameError):
+        actions.cancel(g.state, g.id("angel"), None, source="silver_angel")     # nothing pending
+    action = g.act("angel", "protect", target="v1")
+    assert actions.cancel(g.state, g.id("angel"), None, source="silver_angel") is action
+    assert action.status is ActionStatus.CANCELLED

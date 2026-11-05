@@ -19,17 +19,17 @@ class Resolution {
   messages: dict[int, list[str]]
   deaths: list
   --
-  run(): Outcome
+  run(): str (the GM report)
   .. intents ..
-  inform() / attack() / commit(fn, order)
+  inform() / attack() / commit(fn, after_deaths)
   protect() / block() / redirect()
   claim() / claim_winner() / convert()
   turn_prevented() / keep_use() / revive()
   note() / newspaper()
   .. queries ..
   target_of() / apparent_faction() / apparent_role()
-  visitors_of() / visits_by() / left_house()
-  actions_by() / action_of() / ability_of() / choice()
+  visitors_of() / left_house()
+  actions_by() / ability_of() / choice()
 }
 
 class Visit {
@@ -53,11 +53,6 @@ class Report {
   sections: dict[str, list[str]]
   add() / render()
 }
-class Outcome {
-  report: str
-  deaths
-  messages
-}
 
 class "PREPARE_HOOKS" as PH <<registry>>
 class "FINAL_HOOKS" as FH <<registry>>
@@ -73,7 +68,6 @@ Resolution "1" *-- "*" Visit
 Resolution "1" *-- "*" Attack
 Resolution "1" *-- "*" Protection
 Resolution "1" *-- "1" Report
-Resolution ..> Outcome : returns
 Resolution ..> PH : runs first
 Resolution ..> FH : runs last
 Resolution ..> CV : convert(kind)
@@ -81,8 +75,9 @@ Submit ..> Validate
 Submit ..> Resolution : INSTANT abilities\nresolve immediately
 
 note bottom of Resolution
-  Created by flow (night lock preview on a deep copy,
-  morning for real, dusk, lynch, GM kill/revive) and by
+  Created by transitions (night lock preview on a deep copy,
+  morning for real), lynch (dusk, later lynches),
+  gm_tools (GM kill/revive) and by
   actions.submit for INSTANT abilities.
 end note
 @enduml

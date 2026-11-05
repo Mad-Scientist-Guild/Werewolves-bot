@@ -9,11 +9,11 @@ import re
 from datetime import datetime
 from typing import Any
 
-from Core.abilities import Ability, ParamKind, Timing
+from Core.abilities import PLAYER_KINDS, Ability, ParamKind, Timing
 from Core.actor import ROLE_REGISTRY, RoleBase
 from Core.errors import GameError
 from Core.resolution import describe_action, run_resolution
-from Core.state import ActionStatus, GameState, ChatKind, Phase, Player, SubmittedAction
+from Core.state import ActionStatus, GameState, Phase, Player, SubmittedAction
 
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
@@ -87,7 +87,7 @@ def validate_params(state: GameState, player: Player, ability: Ability, params: 
                 raise GameError(f"Missing `{param.name}`.")
             continue
         kind = param.kind
-        if kind in (ParamKind.LIVING_PLAYER, ParamKind.DEAD_PLAYER, ParamKind.ANY_PLAYER):
+        if kind in PLAYER_KINDS:
             target = state.player(int(value))
             if target is player and not param.allow_self:
                 raise GameError("You can't target yourself with this.")
@@ -113,27 +113,24 @@ def validate_params(state: GameState, player: Player, ability: Ability, params: 
                 raise GameError(f"'{value}' isn't a valid time - use HH:MM (24-hour), e.g. 21:00.")
             hours, minutes = str(value).strip().split(":")
             clean[param.name] = f"{int(hours):02d}:{minutes}"
-        elif kind is ParamKind.FAMILY:
-            chat = state.chats.get(str(value))
-            if chat is None or chat.kind is not ChatKind.FAMILY:
-                raise GameError(f"'{value}' isn't a family.")
-            clean[param.name] = chat.key
-        elif kind is ParamKind.NUMBER:
-            clean[param.name] = int(value)
         else:
             clean[param.name] = value
     return clean
 
 
-def pending_action(state: GameState, player_id: int, ability_key: str, source: str | None = None,
-                   moment: str | None = None) -> SubmittedAction | None:
+def pending_actions(state: GameState, player_id: int, source: str | None = None) -> list[SubmittedAction]:
+    """The player's actions that haven't resolved yet (of one role/modifier if `source` is given)."""
     player = state.find_player(player_id)
     providers = {a.name for a in player.actors() if source is None or a.provides(source)} if player else set()
-    for action in reversed(state.actions):
-        if (action.actor == player_id and action.ability == ability_key
-                and (source is None or action.source == source or action.source in providers)
-                and (moment is None or action.resolves_at == moment)
-                and action.status is ActionStatus.PENDING):
+    return [a for a in state.actions
+            if a.actor == player_id and a.status is ActionStatus.PENDING
+            and (source is None or a.source == source or a.source in providers)]
+
+
+def pending_action(state: GameState, player_id: int, ability_key: str, source: str | None = None,
+                   moment: str | None = None) -> SubmittedAction | None:
+    for action in reversed(pending_actions(state, player_id, source)):
+        if action.ability == ability_key and (moment is None or action.resolves_at == moment):
             return action
     return None
 
@@ -162,7 +159,7 @@ def submit(state: GameState, player_id: int, ability_key: str, params: dict[str,
 
     clean = validate_params(state, player, ability, params)
     targets = [v for p in ability.params
-               if p.kind in (ParamKind.LIVING_PLAYER, ParamKind.DEAD_PLAYER, ParamKind.ANY_PLAYER)
+               if p.kind in PLAYER_KINDS
                and (v := clean.get(p.name)) is not None]
     action = SubmittedAction(
         id=state.next_id("action"), actor=player_id, source=actor.name, ability=ability.key, resolves_at=moment,
@@ -189,17 +186,26 @@ def submit(state: GameState, player_id: int, ability_key: str, params: dict[str,
     )
 
     if moment == "instant":
-        outcome = run_resolution(
+        report = run_resolution(
             state, kind="instant", moment="instant", seed=state.next_id("instant_seed") * 7919 + action.id,
             title=f"{player.display_name}: {actor.name}.{ability.key}", actions=[action],
         )
-        state.log("RESOLVED", outcome.report, actor=player_id, action_id=action.id)
+        state.log("RESOLVED", report, actor=player_id, action_id=action.id)
     return action
 
 
-def cancel(state: GameState, player_id: int, ability_key: str, *, source: str | None = None,
+def cancel(state: GameState, player_id: int, ability_key: str | None, *, source: str | None = None,
            by_gm: bool = False) -> SubmittedAction:
-    action = pending_action(state, player_id, ability_key, source)
+    """Cancel a pending action. Without `ability_key` the player's only pending
+    action (of `source`) is cancelled."""
+    if ability_key is None:
+        pending = pending_actions(state, player_id, source)
+        if len(pending) > 1:
+            raise GameError("You have several pending actions - say which one to cancel: "
+                            + ", ".join(sorted({a.ability for a in pending})))
+        action = pending[0] if pending else None
+    else:
+        action = pending_action(state, player_id, ability_key, source)
     if action is None:
         raise GameError("There's no pending action of that kind to cancel.")
     if state.phase is Phase.SLEEP and action.resolves_at == state.moment("night") and not by_gm:

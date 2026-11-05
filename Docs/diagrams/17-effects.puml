@@ -31,12 +31,6 @@ class QuestionPrompt {
 class TelepathPrompt {
   telepath_message_id
 }
-class CreateChannel {
-  chat_key
-}
-class DirectMessage {
-  user_id, text
-}
 
 Effect <|-- PrivateMessage
 Effect <|-- ChatMessage
@@ -47,15 +41,12 @@ Effect <|-- RoleCard
 Effect <|-- DecisionPrompt
 Effect <|-- QuestionPrompt
 Effect <|-- TelepathPrompt
-Effect <|-- CreateChannel
-Effect <|-- DirectMessage
 
 rectangle "private channel" as PC
 rectangle "chat channel" as CC
 rectangle "#announcements" as AN
 rectangle "dead chat or\nprivate channel" as QC
 rectangle "chooser's private\nchannel or #mod-log" as DC
-rectangle "Discord DM" as DM
 
 PrivateMessage ..> PC
 RoleCard ..> PC
@@ -66,11 +57,12 @@ VoteResults ..> AN
 NewspaperPost ..> AN
 QuestionPrompt ..> QC
 DecisionPrompt ..> DC
-DirectMessage ..> DM
 
 note bottom of Effect
   state.emit(effect) -> pending_effects -> outbox table
   (same transaction as the state) -> EffectDelivery,
   up to 5 attempts, then a GM alert.
+  Channels are not an effect: the worker creates one
+  for every chat that has none yet.
 end note
 @enduml

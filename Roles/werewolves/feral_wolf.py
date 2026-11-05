@@ -25,12 +25,8 @@ class FeralWolf(Role):
                  attacker_faction=WEREWOLVES, action=action)
 
 
-class FeralWolfCommands(RoleCommands, group_name="feral_wolf", source="feral_wolf"):
+class FeralWolfCommands(RoleCommands, CancelCommand, group_name="feral_wolf", source="feral_wolf"):
     @app_commands.command(name="eat", description="Eat an extra player tonight, on your own (3× per game)")
     @app_commands.describe(target="Who to eat")
     async def eat(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "eat", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's extra kill")
-    async def cancel_eat(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "eat")

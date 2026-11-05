@@ -6,7 +6,6 @@ class Priest(Role):
     name = "priest"
     display = "Priest"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Twice per game you can bless a family during the day: nobody in that family can die during the coming "
         "night - except a lover dying of a broken heart. (Being turned isn't dying, so a blessing doesn't stop it.)"
@@ -36,12 +35,8 @@ class Priest(Role):
         ctx.commit(bless)
 
 
-class PriestCommands(RoleCommands, group_name="priest", source="priest"):
+class PriestCommands(RoleCommands, CancelCommand, group_name="priest", source="priest"):
     @app_commands.command(name="bless", description="Bless a family for the coming night (2× per game)")
     @app_commands.describe(member="Anyone in the family you want to bless (yourself is fine)")
     async def bless(self, interaction: discord.Interaction, member: discord.Member) -> None:
         await self.use(interaction, "bless", member=member)
-
-    @app_commands.command(name="cancel", description="Cancel today's blessing")
-    async def cancel_bless(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "bless")

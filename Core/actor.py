@@ -38,7 +38,7 @@ class RoleBase(Polymorphic, family="actor"):
     description: ClassVar[str] = ""
     abilities: ClassVar[tuple[Ability, ...]] = ()
     can_vote_wolf_kill: ClassVar[bool] = False
-    # shared chats this actor belongs to (keys registered with Core.flow.register_chat)
+    # shared chats this actor belongs to (keys registered with Core.players.register_chat)
     chats: ClassVar[tuple[str, ...]] = ()
 
     owner: int = 0
@@ -169,7 +169,6 @@ class RoleBase(Polymorphic, family="actor"):
 @dataclass(eq=False)
 class Role(RoleBase):
     faction: ClassVar[str] = "villagers"
-    tags: ClassVar[frozenset[str]] = frozenset()
     # roles a player can't start with (Turned wolf, Skeleton...) set this False
     assignable: ClassVar[bool] = True
 

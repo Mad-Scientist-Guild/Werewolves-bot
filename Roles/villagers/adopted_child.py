@@ -13,7 +13,6 @@ class AdoptedChild(Role):
     name = "adopted_child"
     display = "Adopted Child"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "You have access to one extra family chat, without being publicly known as part of that family. That "
         "family is told who you are. You can join your second family at any time - **ask the GMs in your private "

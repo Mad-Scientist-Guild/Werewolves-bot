@@ -68,7 +68,7 @@ class WerewolvesBot(commands.Bot):
         channels = ChannelManager(self, games, db)
         delivery = EffectDelivery(self, games, db, channels)
         worker = GameWorker(self, games, delivery, channels, audit)
-        games.listeners.append(worker.wake)
+        games.on_change = worker.wake
 
         runtime.bot, runtime.db, runtime.games = self, db, games
         runtime.audit, runtime.channels, runtime.delivery, runtime.worker = audit, channels, delivery, worker

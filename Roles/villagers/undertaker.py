@@ -13,7 +13,6 @@ class Undertaker(Role):
     name = "undertaker"
     display = "Undertaker"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a day you can examine one dead player: you learn what their role was and what role their killer "
         "had. If the werewolves killed them as a pack, you only learn that it was the werewolves."

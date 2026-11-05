@@ -8,11 +8,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Core import flow
+from Core import lifecycle, players
 from Core.actions import TIME_RE, normalise_role
 from Core.actor import MODIFIER_REGISTRY, ROLE_REGISTRY
 from Core.errors import GameError
-from Core.flow import family_members
+from Core.players import family_members
 from Core.state import ChatKind, Phase
 from Services.discord_utils import is_gm, reply, reply_long
 from Services.role_commands import role_autocomplete
@@ -48,14 +48,14 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
     @app_commands.command(name="add_player", description="Add someone to the game")
     async def add_player(self, interaction: discord.Interaction, member: discord.Member) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            flow.add_player(state, member.id, member.display_name)
+            players.add_player(state, member.id, member.display_name)
             state.log("SETUP", f"{interaction.user.display_name} added {member.display_name}.", actor=interaction.user.id)
         await reply(interaction, f"Added {member.display_name}.")
 
     @app_commands.command(name="remove_player", description="Remove someone from the game (before it starts)")
     async def remove_player(self, interaction: discord.Interaction, member: discord.Member) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            flow.remove_player(state, member.id)
+            players.remove_player(state, member.id)
         await reply(interaction, f"Removed {member.display_name}.")
 
     @app_commands.command(name="backup", description="Add or remove someone on the backup (reaper) list")
@@ -108,7 +108,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
     async def roles_default(self, interaction: discord.Interaction) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             _setup_only(state.phase)
-            state.role_pool = flow.default_role_pool()
+            state.role_pool = lifecycle.default_role_pool()
             state.log("SETUP", "Role pool reset to the default setup.", actor=interaction.user.id)
             summary = _pool_summary(state)
         await reply_long(interaction, "Role pool", summary)
@@ -125,7 +125,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             _setup_only(state.phase)
             if confirm.value == "preview":
                 rng_seed = random.SystemRandom().randrange(1, 2**31)
-                plan = flow.plan_assignment(state, rng_seed)
+                plan = lifecycle.plan_assignment(state, rng_seed)
                 state.data["assignment_preview"] = {str(k): v for k, v in plan.items()}
                 state.log("SETUP", "Role assignment preview made.", actor=interaction.user.id)
                 text = "\n".join(f"{state.name(uid)} → {ROLE_REGISTRY[role].title()}"
@@ -138,7 +138,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
                 plan = {int(k): v for k, v in preview.items()}
                 if set(plan) != set(state.players):
                     raise GameError("The players changed since the preview - make a new one.")
-                flow.apply_assignment(state, plan)
+                lifecycle.apply_assignment(state, plan)
                 state.data["assignment_preview"] = None
                 state.log("SETUP", "Roles assigned: " + ", ".join(f"{state.name(u)}={r}" for u, r in plan.items()),
                           actor=interaction.user.id)
@@ -151,7 +151,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
     async def set_role(self, interaction: discord.Interaction, member: discord.Member, role: str) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             _setup_only(state.phase)
-            flow.set_role(state, state.player(member.id), normalise_role(role), reason=f"set by {interaction.user.display_name}")
+            players.set_role(state, state.player(member.id), normalise_role(role), reason=f"set by {interaction.user.display_name}")
         await reply(interaction, f"{member.display_name} is now {ROLE_REGISTRY[normalise_role(role)].title()}.")
 
     # --- families ---------------------------------------------------------------
@@ -160,7 +160,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
         async with runtime.games.mutate(interaction.guild_id) as state:
             if size is not None:
                 state.settings.family_size = size
-            families = flow.split_families(state, size=state.settings.family_size,
+            families = lifecycle.split_families(state, size=state.settings.family_size,
                                          rng_seed=random.SystemRandom().randrange(1, 2**31))
             text = "\n".join(f"**{g.name}**: {', '.join(p.display_name for p in family_members(state, g.key))}"
                              for g in families)
@@ -173,7 +173,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             key = f"family:{family}"
             if key not in state.chats:
                 state.ensure_chat(key, ChatKind.FAMILY, f"family-{family}")
-            flow.set_family(state, state.player(member.id), key)
+            players.set_family(state, state.player(member.id), key)
         await reply(interaction, f"{member.display_name} is now in family {family}.")
 
     # --- channels & settings ----------------------------------------------------
@@ -186,7 +186,7 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             if missing:
                 raise GameError("Assign roles first - private channels are named after them. Missing: "
                                 + ", ".join(missing))
-            flow.ensure_base_chats(state)
+            lifecycle.ensure_base_chats(state)
         await runtime.channels.setup_base(interaction.guild, handle)
         created = await runtime.channels.ensure_chat_channels(interaction.guild, handle)
         await runtime.channels.sync(interaction.guild, handle)

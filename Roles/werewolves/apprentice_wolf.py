@@ -62,12 +62,8 @@ class ApprenticeWolf(Role):
         ctx.commit(commit)
 
 
-class ApprenticeWolfCommands(RoleCommands, group_name="apprentice_wolf", source="apprentice_wolf"):
+class ApprenticeWolfCommands(RoleCommands, CancelCommand, group_name="apprentice_wolf", source="apprentice_wolf"):
     @app_commands.command(name="take_over", description="Take over the role of a wolf who just died")
     @app_commands.describe(target="The fallen wolf")
     async def take_over(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "take_over", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's take-over")
-    async def cancel_take_over(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "take_over")

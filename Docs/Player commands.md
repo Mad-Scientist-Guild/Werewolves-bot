@@ -19,7 +19,7 @@ _Generated from the bot's role definitions (`python tools/generate_docs.py`)._
 | `/mayor who` | Who is the Mayor? |
 
 Night actions can be submitted from 19:00 until 00:00 and are locked in after that; you can change them
-with the same command until the lock. Day actions can be used from 08:00 until 19:00. Your results arrive
+with the same command until the lock, or take them back with `/<your role> cancel`. Day actions can be used from 08:00 until 19:00. Your results arrive
 in your private channel. Every command answers only you - nobody else sees that you used it.
 
 ## Villagers

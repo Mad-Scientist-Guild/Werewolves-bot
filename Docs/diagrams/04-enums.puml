@@ -32,7 +32,6 @@ enum ChatKind {
 enum Membership {
   ACTIVE
   FORMER
-  REVOKED
 }
 enum PublicRole {
   NONE

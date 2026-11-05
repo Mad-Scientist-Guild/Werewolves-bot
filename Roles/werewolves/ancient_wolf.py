@@ -58,11 +58,7 @@ class AncientWolf(Role):
         ctx.commit(commit)
 
 
-class AncientWolfCommands(RoleCommands, group_name="ancient_wolf", source="ancient_wolf"):
+class AncientWolfCommands(RoleCommands, CancelCommand, group_name="ancient_wolf", source="ancient_wolf"):
     @app_commands.command(name="turn", description="Tonight, turn the pack's victim into a werewolf instead")
     async def turn(self, interaction: discord.Interaction) -> None:
         await self.use(interaction, "turn")
-
-    @app_commands.command(name="cancel", description="Cancel tonight's turn")
-    async def cancel_turn(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "turn")

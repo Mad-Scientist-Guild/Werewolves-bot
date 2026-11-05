@@ -19,7 +19,7 @@ partition "Evaluation pass (read only)" {
 }
 partition "Commit pass (state changes)" {
   :mark actions RESOLVED / BLOCKED\nconsume uses (unless keep_use);
-  :commits with order < 60 (EARLY, NORMAL);
+  :commits, in registration order;
   repeat
     :next unprocessed attack;
     if (attack_prevented?) then (yes)
@@ -30,13 +30,13 @@ partition "Commit pass (state changes)" {
       :on_death (victim) / on_other_death (everyone)\nmay queue more attacks: heartbreak, Lich...;
     endif
   repeat while (more attacks?) is (yes)
-  :commits with order >= 60 (LATE);
-  :process attacks queued by late commits;
+  :commits registered with after_deaths=True;
+  :process attacks queued by those commits;
   :after_resolution on every actor;
   :FINAL_HOOKS (win check, first-death spirits);
   :messages -> PrivateMessage effects;
 }
-:return Outcome(report);
+:return the GM report;
 stop
 
 note right

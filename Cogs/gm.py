@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Core import actions, flow, voting
+from Core import actions, decisions, gm_tools, lifecycle, players, transitions, voting
 from Core.abilities import PLAYER_KINDS, ParamKind
 from Core.actor import MODIFIER_REGISTRY, ROLE_REGISTRY
 from Core.clock import TransitionKind, next_transition, now_in, transition_time
@@ -80,7 +80,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         open_ballots = [b.kind for b in state.ballots.values() if b.is_open]
         if open_ballots:
             lines.append("Open ballots: " + ", ".join(open_ballots))
-        for decision in flow.open_decisions(state):
+        for decision in decisions.open_decisions(state):
             lines.append(f"⚖️ Decision #{decision.id} waiting for {state.name(decision.chooser)}: {decision.prompt}")
         for override in state.night_overrides:
             lines.append(f"🛠️ Night override: {override.kind} {state.name(override.player)} ({override.cause})")
@@ -126,9 +126,9 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         async with runtime.games.mutate(interaction.guild_id) as state:
             if state.phase not in (Phase.NIGHT, Phase.SLEEP):
                 raise GameError("There's no night to preview right now.")
-            outcome = flow.preview_night(state)
+            report = transitions.preview_night(state)
             state.log("GM", f"{interaction.user.display_name} requested a night preview.", actor=interaction.user.id)
-        await reply_long(interaction, f"Night {state.day} — preview (on request)", outcome.report)
+        await reply_long(interaction, f"Night {state.day} — preview (on request)", report)
 
     @app_commands.command(name="log", description="Recent audit log entries")
     async def log(self, interaction: discord.Interaction, player: discord.Member | None = None,
@@ -143,7 +143,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     @app_commands.command(name="act", description="Enter an action for a player (also allowed during sleep time)")
     @app_commands.autocomplete(ability=ability_autocomplete)
     @app_commands.describe(ability="role:ability", target="First player target", target2="Second player target",
-                           option="Role / choice / family option", text="Text or HH:MM time")
+                           option="Role or choice option", text="Text or HH:MM time")
     async def act(self, interaction: discord.Interaction, player: discord.Member, ability: str,
                   target: discord.Member | None = None, target2: discord.Member | None = None,
                   option: str | None = None, text: str | None = None) -> None:
@@ -153,12 +153,12 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         async with runtime.games.mutate(interaction.guild_id) as state:
             p = state.player(player.id)
             actor, ab = actions.find_ability(state, p, key, source or None)
-            players = [t.id for t in (target, target2) if t is not None]
+            targets = [t.id for t in (target, target2) if t is not None]
             params: dict = {}
             for param in ab.params:
                 if param.kind in PLAYER_KINDS:
-                    if players:
-                        params[param.name] = players.pop(0)
+                    if targets:
+                        params[param.name] = targets.pop(0)
                 elif param.kind in (ParamKind.TEXT, ParamKind.TIME):
                     if text is not None:
                         params[param.name], text = text, None
@@ -190,9 +190,9 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
                        cause: str = "gm") -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             if kind.value == "remove":
-                flow.remove_night_override(state, player.id, by=interaction.user.id)
+                gm_tools.remove_night_override(state, player.id, by=interaction.user.id)
             else:
-                flow.add_night_override(state, kind.value, player.id, cause=cause, by=interaction.user.id)
+                gm_tools.add_night_override(state, kind.value, player.id, cause=cause, by=interaction.user.id)
             if state.phase is Phase.SLEEP:
                 refresh_preview(state, f"GM override ({kind.value} {player.display_name})")
         await reply(interaction, f"Override saved: {kind.value} {player.display_name}.")
@@ -202,7 +202,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     async def kill(self, interaction: discord.Interaction, player: discord.Member, cause: str = "gm",
                    public: bool = False) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            report = flow.gm_kill(state, player.id, cause=cause, public=public, by=interaction.user.id)
+            report = gm_tools.gm_kill(state, player.id, cause=cause, public=public, by=interaction.user.id)
             state.report(f"GM kill: {player.display_name}", report)
         await reply(interaction, f"{player.display_name} is dead" + (" (public)." if public else
                                  " (quiet - the Dead role follows at the newspaper)."))
@@ -210,14 +210,14 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     @app_commands.command(name="revive", description="Revive a dead player")
     async def revive(self, interaction: discord.Interaction, player: discord.Member) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            report = flow.gm_revive(state, player.id, by=interaction.user.id)
+            report = gm_tools.gm_revive(state, player.id, by=interaction.user.id)
             state.report(f"GM revive: {player.display_name}", report)
         await reply(interaction, f"{player.display_name} is alive again.")
 
     @app_commands.command(name="replace", description="The Reaper: put a backup player into someone's body")
     async def replace(self, interaction: discord.Interaction, player: discord.Member, replacement: discord.Member) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            p = flow.replace_player(state, player.id, replacement.id, replacement.display_name, by=interaction.user.id)
+            p = gm_tools.replace_player(state, player.id, replacement.id, replacement.display_name, by=interaction.user.id)
             from Core.effects import RoleCard
             state.emit(RoleCard(player=p.user_id, role=p.role_name,
                                 note=f"You have taken over from {player.display_name}. Read back through this "
@@ -230,7 +230,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     async def set_role(self, interaction: discord.Interaction, player: discord.Member, role: str,
                        keep_faction: bool = False, notify: bool = True) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            flow.set_role(state, state.player(player.id), actions.normalise_role(role), keep_faction=keep_faction,
+            players.set_role(state, state.player(player.id), actions.normalise_role(role), keep_faction=keep_faction,
                           notify=notify, reason=f"GM {interaction.user.display_name}")
         await reply(interaction, f"{player.display_name} is now {ROLE_REGISTRY[actions.normalise_role(role)].title()}.")
 
@@ -243,9 +243,9 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         async with runtime.games.mutate(interaction.guild_id) as state:
             p = state.player(player.id)
             if action.value == "add":
-                flow.add_modifier(state, p, modifier, reason=f"GM {interaction.user.display_name}")
+                players.add_modifier(state, p, modifier, reason=f"GM {interaction.user.display_name}")
             else:
-                flow.remove_modifier(state, p, modifier, reason=f"GM {interaction.user.display_name}")
+                players.remove_modifier(state, p, modifier, reason=f"GM {interaction.user.display_name}")
         await reply(interaction, f"{action.value} {modifier}: {player.display_name}")
 
     @app_commands.command(name="set_faction", description="Change a player's base faction")
@@ -279,7 +279,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     @app_commands.command(name="decide", description="Make a pending decision on someone's behalf")
     async def decide(self, interaction: discord.Interaction, decision_id: int, choice: discord.Member) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            result = flow.resolve_decision(state, decision_id, choice.id, by=interaction.user.id, by_gm=True)
+            result = decisions.resolve_decision(state, decision_id, choice.id, by=interaction.user.id, by_gm=True)
             for title, text in result.reports:
                 state.report(title, text)
         await reply(interaction, f"Decision #{decision_id}: {choice.display_name}.")
@@ -318,7 +318,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
                 ballot = voting.close_ballot(state, voting.MAYOR)
                 if ballot is None:
                     raise GameError("No mayor election is open.")
-                flow._finish_mayor_election(state, ballot)
+                transitions.finish_mayor_election(state, ballot)
         await reply(interaction, "Done.")
 
     @app_commands.command(name="announce", description="Post an announcement as the bot")
@@ -398,7 +398,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
                           + [app_commands.Choice(name="nobody / other", value="none")])
     async def end_game(self, interaction: discord.Interaction, winner: app_commands.Choice[str]) -> None:
         async with runtime.games.mutate(interaction.guild_id, snapshot="before game end") as state:
-            flow.end_game(state, None if winner.value == "none" else winner.value, now_in(state))
+            lifecycle.end_game(state, None if winner.value == "none" else winner.value, now_in(state))
         await reply(interaction, "The game has ended.")
 
 

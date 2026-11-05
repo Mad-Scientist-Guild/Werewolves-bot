@@ -77,7 +77,6 @@ class Ballot {
   is_open / allow_abstain
   votes: dict[int, int]
   shown_as: dict[int, int]
-  result: dict
 }
 class VoteRecord {
   voter, target, at, shown_as

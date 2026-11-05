@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Core import flow
+from Core import lifecycle, players
 from Core.clock import now_in, transition_time
 from Core.errors import GameError
 from Core.state import Phase, PublicRole
@@ -62,14 +62,14 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
     @app_commands.command(name="join", description="Join the upcoming game")
     async def join(self, interaction: discord.Interaction) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            flow.add_player(state, interaction.user.id, interaction.user.display_name)
+            players.add_player(state, interaction.user.id, interaction.user.display_name)
             count = len(state.players)
         await reply(interaction, f"You joined the game! ({count} players so far)")
 
     @app_commands.command(name="leave", description="Leave the game before it starts")
     async def leave(self, interaction: discord.Interaction) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            flow.remove_player(state, interaction.user.id)
+            players.remove_player(state, interaction.user.id)
         await reply(interaction, "You left the game.")
 
     @app_commands.command(name="players", description="List the players and what is publicly known about them")
@@ -110,11 +110,11 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
             missing = [p.display_name for p in state.players.values() if p.role is None]
             if missing:
                 raise GameError(f"These players have no role yet: {', '.join(missing)}")
-            flow.ensure_base_chats(state)
+            lifecycle.ensure_base_chats(state)
         await runtime.channels.setup_base(interaction.guild, handle)
         await runtime.channels.ensure_chat_channels(interaction.guild, handle)
         async with runtime.games.mutate(interaction.guild_id, snapshot="before game start") as state:
-            flow.start_game(state, now_in(state))
+            lifecycle.start_game(state, now_in(state))
         await reply(interaction, "The game has started! Role cards are being posted in the private channels.")
 
 

@@ -59,12 +59,6 @@ class RoleCard(Effect):
 
 
 @dataclass
-class CreateChannel(Effect):
-    """A chat created mid-game needs its Discord channel."""
-    chat_key: str
-
-
-@dataclass
 class DecisionPrompt(Effect):
     decision_id: int
 
@@ -72,13 +66,6 @@ class DecisionPrompt(Effect):
 @dataclass
 class NewspaperPost(Effect):
     url: str
-
-
-@dataclass
-class DirectMessage(Effect):
-    """DM to a user (used sparingly, e.g. inactivity warnings)."""
-    user_id: int
-    text: str
 
 
 @dataclass

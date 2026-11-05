@@ -6,7 +6,6 @@ class Gambler(Role):
     name = "gambler"
     display = "Gambler"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a night you can visit a player and learn their full role. But if they belong to an evil faction "
         "(Werewolves, Undead or Coven) you die tragically. Visiting the Lich kills you and turns you into a Skeleton."
@@ -43,15 +42,11 @@ class Gambler(Role):
             elif target.role_name == "lich" and "skeleton" in CONVERSIONS:
                 ctx.convert("skeleton", self.owner, by=target.user_id)
 
-        ctx.commit(check, order=Resolution.LATE)
+        ctx.commit(check, after_deaths=True)
 
 
-class GamblerCommands(RoleCommands, group_name="gambler", source="gambler"):
+class GamblerCommands(RoleCommands, CancelCommand, group_name="gambler", source="gambler"):
     @app_commands.command(name="visit", description="Visit a player tonight and learn their role (deadly if evil)")
     @app_commands.describe(target="Who to visit")
     async def visit(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "visit", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's visit")
-    async def cancel_visit(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "visit")

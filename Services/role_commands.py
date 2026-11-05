@@ -9,6 +9,10 @@
 available to them right now (role, copied role, modifier...), validates
 phase/targets/uses, stores the action, saves, logs and replies. Every
 subclass is collected in COMMAND_COGS and added to the bot automatically.
+
+Add the CancelCommand mixin to give the group a `cancel` subcommand:
+
+    class SeerCommands(RoleCommands, CancelCommand, group_name="seer", source="seer"):
 """
 from __future__ import annotations
 
@@ -59,10 +63,31 @@ class RoleCommands(commands.GroupCog):
         await reply(interaction, text)
         return action
 
-    async def cancel(self, interaction: discord.Interaction, ability: str) -> None:
+    async def cancel(self, interaction: discord.Interaction, ability: str | None = None) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             action = actions.cancel(state, interaction.user.id, ability, source=self.source or None)
         await reply(interaction, f"Cancelled: {action.ability}.")
+
+
+async def pending_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    """The caller's pending actions of this command group."""
+    handle = runtime.games.find(interaction.guild_id)
+    cog = interaction.command.binding if interaction.command else None
+    if handle is None or cog is None:
+        return []
+    keys = sorted({a.ability for a in actions.pending_actions(handle.state, interaction.user.id, cog.source)})
+    return [app_commands.Choice(name=k.replace("_", " "), value=k) for k in keys if current.lower() in k][:25]
+
+
+class CancelCommand:
+    """Mixin for a RoleCommands subclass: adds `/<group> cancel`, which takes
+    back a submitted action that hasn't resolved yet."""
+
+    @app_commands.command(name="cancel", description="Take back an action you submitted")
+    @app_commands.describe(ability="Only needed when you have several pending actions")
+    @app_commands.autocomplete(ability=pending_autocomplete)
+    async def cancel_pending(self, interaction: discord.Interaction, ability: str | None = None) -> None:
+        await self.cancel(interaction, ability)
 
 
 def _plain(value: Any) -> Any:
@@ -90,9 +115,9 @@ def confirmation(state: GameState, action: SubmittedAction) -> str:
 
 def refresh_preview(state: GameState, reason: str) -> None:
     """Re-run the night preview after something changed during sleep time."""
-    from Core.flow import preview_night
-    outcome = preview_night(state)
-    state.report(f"Night {state.day} — preview (updated: {reason})", outcome.report)
+    from Core.transitions import preview_night
+    report = preview_night(state)
+    state.report(f"Night {state.day} — preview (updated: {reason})", report)
 
 
 async def role_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:

@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import Roles  # noqa: F401
-from Core import flow
+from Core import lifecycle, players, transitions
 from Core.clock import TransitionKind
 from Core.effects import Announcement
 from Core.errors import GameError
@@ -72,8 +72,8 @@ async def test_state_survives_a_restart(service, tmp_path):
     handle = await service.create(1)
     async with service.mutate(1) as state:
         for i, role in enumerate(["silver_angel", "ancient_wolf", "villager"]):
-            p = flow.add_player(state, 10 + i, f"p{i}")
-            flow.set_role(state, p, role)
+            p = players.add_player(state, 10 + i, f"p{i}")
+            players.set_role(state, p, role)
         state.emit(Announcement(text="hello"))
         state.report("Test report", "body")
     before = encode(handle.state)
@@ -92,7 +92,7 @@ async def test_failed_mutation_rolls_back(service):
     await service.create(1)
     with pytest.raises(GameError):
         async with service.mutate(1) as state:
-            flow.add_player(state, 10, "p0")
+            players.add_player(state, 10, "p0")
             raise GameError("nope")
     assert service.get(1).state.players == {}
     events = await service.db.recent_events(service.get(1).game_id)
@@ -102,9 +102,9 @@ async def test_failed_mutation_rolls_back(service):
 async def test_snapshot_and_restore(service):
     handle = await service.create(1)
     async with service.mutate(1) as state:
-        flow.add_player(state, 10, "p0")
+        players.add_player(state, 10, "p0")
     async with service.mutate(1, snapshot="before second player") as state:
-        flow.add_player(state, 11, "p1")
+        players.add_player(state, 11, "p1")
     snaps = await service.db.snapshots(handle.game_id)
     assert snaps[0][1] == "before second player"
     restored = await service.restore(1, snaps[0][0], by=99)
@@ -117,11 +117,11 @@ async def test_full_day_cycle_through_the_service(service):
     await service.create(1)
     async with service.mutate(1) as state:
         for i, role in enumerate(["ancient_wolf", "ancient_wolf", "villager", "villager", "silver_angel"]):
-            flow.set_role(state, flow.add_player(state, 10 + i, f"p{i}"), role)
-        flow.start_game(state, datetime(2026, 10, 5, 10, 0, tzinfo=TZ))
+            players.set_role(state, players.add_player(state, 10 + i, f"p{i}"), role)
+        lifecycle.start_game(state, datetime(2026, 10, 5, 10, 0, tzinfo=TZ))
     for kind, hour in ((TransitionKind.NEWSPAPER, 12), (TransitionKind.DUSK, 19)):
         async with service.mutate(1, snapshot=kind.value) as state:
-            flow.run_transition(state, kind, datetime(2026, 10, 5, hour, tzinfo=TZ))
+            transitions.run_transition(state, kind, datetime(2026, 10, 5, hour, tzinfo=TZ))
     assert service.get(1).state.phase is Phase.NIGHT
     fresh = GameService(service.db)
     await fresh.load_all()
@@ -153,8 +153,8 @@ async def test_end_before_start_keeps_everything_until_deleted(service):
     from Core.errors import GameAlreadyActive, NoActiveGame
     handle = await service.create(1)
     async with service.mutate(1) as state:
-        flow.add_player(state, 10, "p0")
-        flow.end_game(state, None, datetime(2026, 10, 5, 10, 0, tzinfo=TZ))      # never started
+        players.add_player(state, 10, "p0")
+        lifecycle.end_game(state, None, datetime(2026, 10, 5, 10, 0, tzinfo=TZ))      # never started
     with pytest.raises(GameAlreadyActive, match="delete"):
         await service.create(1)
     fresh = GameService(service.db)

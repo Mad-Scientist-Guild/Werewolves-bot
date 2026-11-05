@@ -1,4 +1,4 @@
-from Core import flow
+from Core import decisions, players
 from Core.resolution import register_conversion
 from Roles.role import *
 
@@ -37,8 +37,8 @@ def living_spawns(state: GameState) -> list[Player]:
 
 
 def promote(state: GameState, spawn: Player, *, reason: str) -> None:
-    flow.remove_modifier(state, spawn, "vampire_spawn", reason=reason)
-    flow.set_role(state, spawn, "vampire_lord", reason=reason,
+    players.remove_modifier(state, spawn, "vampire_spawn", reason=reason)
+    players.set_role(state, spawn, "vampire_lord", reason=reason,
                   note="The Vampire Lord is dead - you have taken their place (and lost your previous ability).")
 
 
@@ -46,7 +46,7 @@ def _decide_new_lord(state: GameState, decision, result) -> None:
     promote(state, state.player(decision.choice), reason="chosen by the spawns as the new Vampire Lord")
 
 
-flow.DECISION_HANDLERS["new_vampire_lord"] = _decide_new_lord
+decisions.DECISION_HANDLERS["new_vampire_lord"] = _decide_new_lord
 
 
 @register_role
@@ -95,7 +95,7 @@ class VampireLord(Role):
             return
         ctx.claim("turn", target, self.owner)
 
-        def commit() -> None:   # LATE: the Lord must still be alive after tonight's deaths
+        def commit() -> None:   # after deaths: the Lord must still be alive after tonight's deaths
             if ctx.claim_winner("turn", target) != self.owner:
                 ctx.inform(self.owner, f"Your attempt to turn {ctx.state.name(target)} failed.")
                 return
@@ -106,7 +106,7 @@ class VampireLord(Role):
             ctx.note("Conversions", f"{ctx.state.name(target)} is turned into a Vampire Spawn")
             ctx.inform(self.owner, f"You turned **{ctx.state.name(target)}** into your Vampire Spawn.")
 
-        ctx.commit(commit, order=Resolution.LATE)
+        ctx.commit(commit, after_deaths=True)
 
     def on_death(self, ctx: Resolution, record: DeathRecord) -> None:
         ctx.flags[f"vampire_lord_died:{self.owner}"] = True
@@ -120,13 +120,13 @@ class VampireLord(Role):
             promote(ctx.state, ready[0], reason="the Vampire Lord died")
             ctx.note("Conversions", f"{ready[0].display_name} becomes the new Vampire Lord")
         elif len(ready) > 1:
-            flow.create_decision(
+            decisions.create_decision(
                 ctx.state, "new_vampire_lord", None, [s.user_id for s in ready],
                 "The Vampire Lord died and several spawns shared in a kill. They decide together who becomes the "
                 "new Vampire Lord - ask them in the undead chat and pick their choice:")
 
 
-class VampireLordCommands(RoleCommands, group_name="vampire_lord", source="vampire_lord"):
+class VampireLordCommands(RoleCommands, CancelCommand, group_name="vampire_lord", source="vampire_lord"):
     @app_commands.command(name="bite", description="Bite a player tonight: kill them, or turn them into your Spawn")
     @app_commands.describe(target="Who to bite", mode="kill (default) or turn (only while you have no Spawn)")
     @app_commands.choices(mode=[app_commands.Choice(name="kill", value="kill"),
@@ -134,7 +134,3 @@ class VampireLordCommands(RoleCommands, group_name="vampire_lord", source="vampi
     async def bite(self, interaction: discord.Interaction, target: discord.Member,
                    mode: app_commands.Choice[str] | None = None) -> None:
         await self.use(interaction, "bite", target=target, mode=mode)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's bite")
-    async def cancel_bite(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "bite")

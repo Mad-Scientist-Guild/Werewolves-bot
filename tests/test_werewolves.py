@@ -1,6 +1,6 @@
 import pytest
 
-from Core import flow
+from Core import gm_tools
 from Core.actor import ROLE_REGISTRY
 from Core.effects import VoteResults
 from Core.errors import GameError
@@ -73,7 +73,7 @@ def test_apprentice_takes_over_the_fallen_wolf_with_its_charges():
     assert app.role.owner == app.user_id
     assert app.original_role == "apprentice_wolf"
     # the fallen wolf comes back without abilities
-    flow.gm_revive(g.state, g.id("feral"))
+    gm_tools.gm_revive(g.state, g.id("feral"))
     assert g.p("feral").role_name == "werewolf"
 
 

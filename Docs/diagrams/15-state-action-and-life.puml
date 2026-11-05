@@ -5,7 +5,7 @@ title Action lifecycle and player life states
 state "SubmittedAction.status" as A {
   [*] --> PENDING : submit
   PENDING --> REPLACED : same ability\nsubmitted again
-  PENDING --> CANCELLED : /x cancel,\n/gm cancel_action
+  PENDING --> CANCELLED : /<group> cancel,\n/gm cancel_action
   PENDING --> RESOLVED : resolution ran it
   PENDING --> BLOCKED : lock / stalk / curse
   PENDING --> FAILED : actor dead or\nability gone

@@ -8,7 +8,6 @@ class Prophet(Role):
     name = "prophet"
     display = "Prophet"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Every night you can pray for a role. If a living player has it, you receive a list of a third of the "
         "living players, at least one of whom has that role. If nobody alive has it, you're told so."
@@ -36,13 +35,9 @@ class Prophet(Role):
         ctx.inform(self.owner, f"Your prayers are answered. At least one of these is the **{title}**: {names}.")
 
 
-class ProphetCommands(RoleCommands, group_name="prophet", source="prophet"):
+class ProphetCommands(RoleCommands, CancelCommand, group_name="prophet", source="prophet"):
     @app_commands.command(name="pray", description="Pray for a role tonight")
     @app_commands.describe(role="The role to pray for")
     @app_commands.autocomplete(role=role_autocomplete)
     async def pray(self, interaction: discord.Interaction, role: str) -> None:
         await self.use(interaction, "pray", role=role)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's prayer")
-    async def cancel_pray(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "pray")

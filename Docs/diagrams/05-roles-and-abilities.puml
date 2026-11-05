@@ -34,7 +34,6 @@ abstract class RoleBase {
 
 class Role {
   {static} faction: str
-  {static} tags
   {static} assignable: bool
 }
 
@@ -55,7 +54,7 @@ class Ability <<frozen>> {
   visits: str
   uses: int
   once_per_cycle / usable_while_dead
-  phases / first_day / consume_on_block
+  phases / first_day
 }
 
 class Param <<frozen>> {
@@ -77,7 +76,10 @@ class VengefulSpirit
 abstract class RoleCommands <<discord GroupCog>> {
   {static} source: str
   use(interaction, ability, **params)
-  cancel(interaction, ability)
+  cancel(interaction, ability=None)
+}
+class CancelCommand <<mixin>> {
+  /<group> cancel [ability]
 }
 class SeerCommands
 class CovenCommands <<abstract=True>> {
@@ -104,6 +106,7 @@ RoleBase "1" *-- "*" Ability
 Ability "1" *-- "*" Param
 
 RoleCommands <|-- SeerCommands
+CancelCommand <|-- SeerCommands
 RoleCommands <|-- CovenCommands
 CovenCommands <|-- CurseweaverCommands
 SeerCommands ..> Seer : source = "seer"

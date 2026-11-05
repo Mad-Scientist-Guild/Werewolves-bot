@@ -10,7 +10,6 @@ class ActorRole(Role):
     name = "actor"
     display = "Actor"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once per day you can take on another villager role: for that day and the following night you have its "
         "powers (with fresh uses) and can use its commands. You can never take on the same role twice, and not "

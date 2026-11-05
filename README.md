@@ -106,7 +106,12 @@ Core/           the game engine - pure Python, no Discord, fully unit-tested
   abilities.py    Ability / Param declarations
   actions.py      submitting and validating actions
   resolution.py   the resolution pipeline (night, dusk, instant)
-  flow.py         setup, daily transitions, decisions, GM operations
+  players.py      changing roles, modifiers, conditions, chats and families
+  lifecycle.py    role pool, assignment, families, start / end, win check
+  transitions.py  the daily transitions and the night resolution
+  lynch.py        dusk, Mayor tiebreak, second lynch
+  decisions.py    choices a player or the GMs must make (menus)
+  gm_tools.py     GM kills, revives, night overrides, replacements
   voting.py       lynch / second lynch / mayor / werewolf ballots
   access.py       who may see/write which channel (derived from state)
   factions.py     factions and win checks

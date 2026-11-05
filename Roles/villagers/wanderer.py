@@ -6,7 +6,6 @@ class Wanderer(Role):
     name = "wanderer"
     display = "Wanderer"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "At night you wander through town and spot someone who left their house, picked at random - they don't "
         "know you saw them. After the first night you can also choose to look for the same person again: you'll "
@@ -45,14 +44,10 @@ class Wanderer(Role):
         ctx.commit(lambda: setattr(self, "last_seen", seen))
 
 
-class WandererCommands(RoleCommands, group_name="wanderer", source="wanderer"):
+class WandererCommands(RoleCommands, CancelCommand, group_name="wanderer", source="wanderer"):
     @app_commands.command(name="wander", description="Wander the town tonight")
     @app_commands.describe(mode="random (default) or same: look for the person you saw last time")
     @app_commands.choices(mode=[app_commands.Choice(name="spot someone at random", value="random"),
                                 app_commands.Choice(name="look for the same person again", value="same")])
     async def wander(self, interaction: discord.Interaction, mode: app_commands.Choice[str] | None = None) -> None:
         await self.use(interaction, "wander", mode=mode)
-
-    @app_commands.command(name="cancel", description="Stay home tonight after all")
-    async def cancel_wander(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "wander")

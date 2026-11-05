@@ -9,7 +9,6 @@ class Spiritualist(Role):
     name = "spiritualist"
     display = "Spiritualist"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "You can talk to the dead. Once a day you can ask them a yes-or-no question; you get the answer when all "
         "of them have responded, or at the end of the day (19:00) or night (00:00), whichever comes first. You "

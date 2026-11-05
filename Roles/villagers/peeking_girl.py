@@ -10,7 +10,6 @@ class PeekingGirl(Role):
     name = "peeking_girl"
     display = "Peeking Girl"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once per day (midnight to midnight) you can pick a 60-minute window to listen in on the werewolves. From "
         "the moment a wolf talks during that window, you get the first 15 minutes of their chat as a transcript - "

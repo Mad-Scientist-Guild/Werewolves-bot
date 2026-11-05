@@ -31,16 +31,13 @@ class Priority(IntEnum):
 class ParamKind(str, Enum):
     LIVING_PLAYER = "living_player"
     DEAD_PLAYER = "dead_player"
-    ANY_PLAYER = "any_player"
     ROLE = "role"
     CHOICE = "choice"
     TEXT = "text"
     TIME = "time"
-    FAMILY = "family"
-    NUMBER = "number"
 
 
-PLAYER_KINDS = (ParamKind.LIVING_PLAYER, ParamKind.DEAD_PLAYER, ParamKind.ANY_PLAYER)
+PLAYER_KINDS = (ParamKind.LIVING_PLAYER, ParamKind.DEAD_PLAYER)
 
 
 @dataclass(frozen=True)
@@ -66,10 +63,6 @@ class P:
         return Param(name, ParamKind.DEAD_PLAYER, description, **kw)
 
     @staticmethod
-    def any_player(name: str = "target", description: str = "A player", **kw) -> Param:
-        return Param(name, ParamKind.ANY_PLAYER, description, **kw)
-
-    @staticmethod
     def role(name: str = "role", description: str = "A role name", **kw) -> Param:
         return Param(name, ParamKind.ROLE, description, **kw)
 
@@ -84,10 +77,6 @@ class P:
     @staticmethod
     def time(name: str = "time", description: str = "HH:MM, 24-hour", **kw) -> Param:
         return Param(name, ParamKind.TIME, description, **kw)
-
-    @staticmethod
-    def family(name: str = "family", description: str = "A family", **kw) -> Param:
-        return Param(name, ParamKind.FAMILY, description, **kw)
 
 
 @dataclass(frozen=True)
@@ -108,8 +97,6 @@ class Ability:
     usable_while_dead: bool = False
     # for INSTANT abilities: phases in which it may be used (empty = DAY, NIGHT and SLEEP)
     phases: tuple[str, ...] = ()
-    # consume a use even when the action was blocked
-    consume_on_block: bool = False
     # may be used during the first day (by default nothing happens on day 1)
     first_day: bool = False
 

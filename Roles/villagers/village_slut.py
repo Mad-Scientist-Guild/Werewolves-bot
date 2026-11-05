@@ -8,7 +8,6 @@ class VillageSlut(Role):
     name = "village_slut"
     display = "Village Slut"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Every night you can spend the night at someone else's house. If anyone attacks you at home, you're not "
         "there and survive. But if your host is attacked, you die with them - and if your host is turned into a "
@@ -64,12 +63,8 @@ class VillageSlut(Role):
         ctx.convert(kind, self.owner, by=by)
 
 
-class VillageSlutCommands(RoleCommands, group_name="village_slut", source="village_slut"):
+class VillageSlutCommands(RoleCommands, CancelCommand, group_name="village_slut", source="village_slut"):
     @app_commands.command(name="visit", description="Spend the night at someone else's house")
     @app_commands.describe(target="Who to spend the night with")
     async def visit(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "visit", target=target)
-
-    @app_commands.command(name="cancel", description="Stay home tonight after all")
-    async def cancel_visit(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "visit")

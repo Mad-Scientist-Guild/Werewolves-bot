@@ -9,7 +9,7 @@ import re
 
 import discord
 
-from Core import flow
+from Core import decisions
 from Core.state import Decision, GameState
 from Services.discord_utils import embed, is_gm
 from Services.runtime import runtime
@@ -38,7 +38,7 @@ class DecisionSelect(discord.ui.DynamicItem[discord.ui.Select], template=r"xpw:d
             by_gm = (decision is not None and decision.chooser != interaction.user.id
                      and is_gm(interaction.user, handle.state))
             async with runtime.games.mutate(self.guild_id) as state:
-                result = flow.resolve_decision(state, self.decision_id, choice, by=interaction.user.id, by_gm=by_gm)
+                result = decisions.resolve_decision(state, self.decision_id, choice, by=interaction.user.id, by_gm=by_gm)
                 for title, text in result.reports:
                     state.report(title, text)
                 name = state.name(choice)

@@ -20,7 +20,7 @@ case (DEAD)
     :NONE (death rules);
   endif
 case (any other)
-  if (no membership or REVOKED?) then (yes)
+  if (no membership?) then (yes)
     :NONE;
   elseif (FORMER member or chat archived?) then (yes)
     :READ;

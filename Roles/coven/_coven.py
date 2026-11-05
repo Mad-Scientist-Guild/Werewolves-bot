@@ -16,7 +16,7 @@ import random
 
 from Core.effects import ChatMessage
 from Core.factions import COVEN
-from Core.flow import seed
+from Core.players import seed
 from Roles.role import *
 from Services.discord_utils import reply
 from Services.runtime import runtime

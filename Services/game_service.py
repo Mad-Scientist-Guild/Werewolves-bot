@@ -51,7 +51,8 @@ class GameService:
     def __init__(self, db: Database):
         self.db = db
         self.handles: dict[int, GameHandle] = {}
-        self.listeners: list[Callable[[GameHandle], None]] = []
+        # called after every committed change; bot.py points it at GameWorker.wake
+        self.on_change: Callable[[GameHandle], None] | None = None
 
     # --- lookup ----------------------------------------------------------------
     def find(self, guild_id: int | None) -> GameHandle | None:
@@ -88,7 +89,7 @@ class GameService:
                 raise GameAlreadyActive("The last game in this server has ended but is still saved. Delete it with "
                                         "`/game delete` before creating a new one.")
             raise GameAlreadyActive("A game is already running in this server.")
-        from Core.flow import default_role_pool
+        from Core.lifecycle import default_role_pool
         state = GameState(guild_id=guild_id, role_pool=default_role_pool())
         game_id = await self.db.create_game(guild_id, encode(state))
         state.game_id = game_id
@@ -159,8 +160,9 @@ class GameService:
         log.warning("Game %s of guild %s deleted by user %s", handle.game_id, guild_id, by)
 
     def _notify(self, handle: GameHandle) -> None:
-        for listener in self.listeners:
-            try:
-                listener(handle)
-            except Exception:
-                log.exception("Game listener failed")
+        if self.on_change is None:
+            return
+        try:
+            self.on_change(handle)
+        except Exception:
+            log.exception("Change notification failed")

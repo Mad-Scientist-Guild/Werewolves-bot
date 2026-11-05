@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import Roles  # noqa: F401 - registers every role
-from Core import actions, flow, voting
+from Core import actions, decisions, lifecycle, players, transitions, voting
 from Core.clock import TransitionKind
 from Core.state import GameState, Player
 
@@ -31,8 +31,8 @@ class GameBuilder:
     def player(self, name: str, role: str) -> Player:
         uid = 100 + len(self.ids)
         self.ids[name] = uid
-        player = flow.add_player(self.state, uid, name)
-        flow.set_role(self.state, player, role)
+        player = players.add_player(self.state, uid, name)
+        players.set_role(self.state, player, role)
         return player
 
     def players(self, **roles: str) -> None:
@@ -46,7 +46,7 @@ class GameBuilder:
             key = f"family:{index}"
             self.state.ensure_chat(key, ChatKind.FAMILY, f"family-{index}")
             for name in names:
-                flow.set_family(self.state, self.p(name), key)
+                players.set_family(self.state, self.p(name), key)
 
     def id(self, name: str) -> int:
         return self.ids[name]
@@ -55,34 +55,34 @@ class GameBuilder:
         return self.state.player(self.ids[name])
 
     def start(self) -> "GameBuilder":
-        flow.start_game(self.state, self.now)
+        lifecycle.start_game(self.state, self.now)
         return self
 
     # --- time ----------------------------------------------------------------
-    def _run(self, kind: TransitionKind, hour: int) -> flow.FlowResult:
+    def _run(self, kind: TransitionKind, hour: int) -> decisions.FlowResult:
         self.now = self.now.replace(hour=hour, minute=0)
-        result = flow.run_transition(self.state, kind, self.now)
+        result = transitions.run_transition(self.state, kind, self.now)
         self.reports.extend(result.reports)
         return result
 
-    def newspaper(self) -> flow.FlowResult:
+    def newspaper(self) -> decisions.FlowResult:
         return self._run(TransitionKind.NEWSPAPER, 12)
 
-    def dusk(self) -> flow.FlowResult:
+    def dusk(self) -> decisions.FlowResult:
         return self._run(TransitionKind.DUSK, 19)
 
-    def second_lynch_end(self) -> flow.FlowResult:
+    def second_lynch_end(self) -> decisions.FlowResult:
         return self._run(TransitionKind.SECOND_LYNCH_END, 20)
 
-    def lock(self) -> flow.FlowResult:
+    def lock(self) -> decisions.FlowResult:
         result = self._run(TransitionKind.NIGHT_LOCK, 23)
         self.now += timedelta(hours=1)
         return result
 
-    def morning(self) -> flow.FlowResult:
+    def morning(self) -> decisions.FlowResult:
         return self._run(TransitionKind.MORNING, 8)
 
-    def night(self) -> flow.FlowResult:
+    def night(self) -> decisions.FlowResult:
         """lock + morning"""
         self.lock()
         return self.morning()

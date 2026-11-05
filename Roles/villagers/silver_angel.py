@@ -16,7 +16,6 @@ class SilverAngel(Role):
     name = "silver_angel"                 # unique key; used in commands, the role pool and the database
     display = "Silver Angel"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Every night you may protect one person (yourself included). They can't die that night from the "
         "Werewolves, the Coven or the Undead, and your protection also stops them from being turned. "
@@ -59,12 +58,8 @@ class SilverAngel(Role):
             self.last_protected = ctx.flags.get(f"silver_angel_protected:{self.owner}")
 
 
-class SilverAngelCommands(RoleCommands, group_name="silver_angel", source="silver_angel"):
+class SilverAngelCommands(RoleCommands, CancelCommand, group_name="silver_angel", source="silver_angel"):
     @app_commands.command(name="protect", description="Protect a player tonight (yourself included)")
     @app_commands.describe(target="Who to protect")
     async def protect(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "protect", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's protection")
-    async def cancel_protect(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "protect")

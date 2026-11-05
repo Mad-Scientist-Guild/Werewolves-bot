@@ -32,7 +32,7 @@ else ok
   GS --> RC : release lock
   deactivate GS
   RC --> Player : ephemeral confirmation
-  GS ->> W : notify(handle)
+  GS ->> W : on_change(handle) = wake
   W -> CM : ensure_chat_channels
   W -> ED : deliver(outbox)
   ED -> Discord : messages

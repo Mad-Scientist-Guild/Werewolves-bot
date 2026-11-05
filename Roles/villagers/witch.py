@@ -6,7 +6,6 @@ class Witch(Role):
     name = "witch"
     display = "Witch"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "You have two potions, each usable once. The **potion of death** (at night) kills a player by the next "
         "morning. The **elixir of life** (during the day) brings back someone who died last night - they return "
@@ -37,19 +36,19 @@ class Witch(Role):
                 self.refund("poison")
                 ctx.inform(self.owner, f"{ctx.state.name(attack.target)} wasn't home - your potion of death is unused.")
 
-        ctx.commit(keep_potion_if_not_home, order=Resolution.LATE)
+        ctx.commit(keep_potion_if_not_home, after_deaths=True)
 
     def resolve_revive(self, ctx: Resolution, action: SubmittedAction) -> None:
         target = action.target
 
-        def revive() -> None:   # LATE: after the lynch
+        def revive() -> None:   # after deaths: they come back after the lynch
             ctx.revive(target, reason="the Witch's elixir of life")
             ctx.inform(target, "You feel warmth returning to your body... the Witch has brought you back to life!")
 
-        ctx.commit(revive, order=Resolution.LATE)
+        ctx.commit(revive, after_deaths=True)
 
 
-class WitchCommands(RoleCommands, group_name="witch", source="witch"):
+class WitchCommands(RoleCommands, CancelCommand, group_name="witch", source="witch"):
     @app_commands.command(name="poison", description="Use your potion of death tonight (once per game)")
     @app_commands.describe(target="Who to poison")
     async def poison(self, interaction: discord.Interaction, target: discord.Member) -> None:
@@ -59,9 +58,3 @@ class WitchCommands(RoleCommands, group_name="witch", source="witch"):
     @app_commands.describe(target="Who to bring back (they return after the lynch)")
     async def revive(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "revive", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel a potion you haven't used yet")
-    @app_commands.choices(potion=[app_commands.Choice(name="potion of death", value="poison"),
-                                  app_commands.Choice(name="elixir of life", value="revive")])
-    async def cancel_potion(self, interaction: discord.Interaction, potion: app_commands.Choice[str]) -> None:
-        await self.cancel(interaction, potion.value)

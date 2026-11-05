@@ -54,7 +54,6 @@ class ChatKind(str, Enum):
 class Membership(str, Enum):
     ACTIVE = "active"
     FORMER = "former"    # left the chat: keeps read-only access (nothing is made inaccessible)
-    REVOKED = "revoked"  # explicit revocation - only used by the death rules
 
 
 class PublicRole(str, Enum):
@@ -233,7 +232,6 @@ class Ballot:
     votes: dict[int, int | None] = field(default_factory=dict)   # voter -> target (None = abstain)
     shown_as: dict[int, int] = field(default_factory=dict)       # voter -> name shown when published
     history: list[VoteRecord] = field(default_factory=list)
-    result: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -248,7 +246,6 @@ class Decision:
     created_at: str = ""
     resolved: bool = False
     choice: int | None = None
-    message_id: int | None = None
     data: dict[str, Any] = field(default_factory=dict)
 
 
@@ -289,7 +286,6 @@ class YesNoQuestion:
     deadline: str
     voters: list[int] = field(default_factory=list)          # who may answer
     answers: dict[int, bool] = field(default_factory=dict)
-    message_id: int | None = None
     done: bool = False
     kind: str = "dead"
     where: str = "dead"                                       # chat whose channel gets the question
@@ -468,14 +464,12 @@ class GameState:
         return [g for g in self.chats.values() if g.kind is kind]
 
     def ensure_chat(self, key: str, kind: ChatKind, name: str, *, topic: str = "") -> Chat:
-        """Return the chat, creating it (and queueing its channel) if new."""
+        """Return the chat, creating it if new. Once the game has started, the
+        worker creates the Discord channel of every chat that has none yet."""
         chat = self.chats.get(key)
         if chat is None:
-            from Core.effects import CreateChannel
             chat = Chat(key=key, kind=kind, name=name, created_day=self.day, topic=topic)
             self.chats[key] = chat
-            if self.phase is not Phase.SETUP:
-                self.emit(CreateChannel(chat_key=key))
         return chat
 
     # --- misc ------------------------------------------------------------

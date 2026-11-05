@@ -44,12 +44,8 @@ class GraveRobber(Role):
                                     note=f"You plundered {target.display_name}'s grave."))
 
 
-class GraveRobberCommands(RoleCommands, group_name="grave_robber", source="grave_robber"):
+class GraveRobberCommands(RoleCommands, CancelCommand, group_name="grave_robber", source="grave_robber"):
     @app_commands.command(name="rob", description="Plunder a dead player's grave and take over their role")
     @app_commands.describe(target="Whose grave to plunder")
     async def rob(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "rob", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel your plundering before it resolves")
-    async def cancel_rob(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "rob")

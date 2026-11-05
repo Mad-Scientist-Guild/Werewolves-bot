@@ -4,11 +4,10 @@ The channel reconciler turns these into Discord permission overwrites, so
 every rule about channel access lives here.
 
 Data is never made inaccessible: leaving a chat or a chat being archived
-downgrades to READ. The only full revocations are the death rules of the
-rules document, written out explicitly below:
-  * the dead chat is for the dead only - a raised Skeleton or a revived
-    player loses it, and a Vengeful Spirit is kept out of it;
-  * Membership.REVOKED, which only death-rule code may set.
+downgrades to READ. The only full revocation is the death rule of the
+rules document, written out explicitly below: the dead chat is for the dead
+only - a raised Skeleton or a revived player loses it, and a Vengeful Spirit
+is kept out of it.
 """
 from __future__ import annotations
 
@@ -49,7 +48,7 @@ def player_access(state: GameState, chat: Chat, player: Player) -> Access:
         return Access.READ if chat.archived else Access.WRITE
 
     membership = chat.members.get(player.user_id)
-    if membership is None or membership is Membership.REVOKED:
+    if membership is None:
         return Access.NONE
     if membership is Membership.FORMER or chat.archived:
         return Access.READ

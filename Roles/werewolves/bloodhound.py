@@ -26,12 +26,8 @@ class Bloodhound(Role):
         ctx.inform(self.owner, f"**{ctx.state.name(target)}** {'left their house' if left else 'stayed at home'} last night.")
 
 
-class BloodhoundCommands(RoleCommands, group_name="bloodhound", source="bloodhound"):
+class BloodhoundCommands(RoleCommands, CancelCommand, group_name="bloodhound", source="bloodhound"):
     @app_commands.command(name="track", description="Find out whether a player leaves their house tonight")
     @app_commands.describe(target="Whose scent to follow")
     async def track(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "track", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's tracking")
-    async def cancel_track(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "track")

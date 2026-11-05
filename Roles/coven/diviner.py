@@ -81,7 +81,7 @@ class Diviner(CovenRole):
         ctx.inform(self.owner, f"You'll scry the house of **{ctx.state.name(action.target)}** from {start:%H:%M}.")
 
 
-class DivinerCommands(CovenCommands, group_name="diviner", source="diviner"):
+class DivinerCommands(CovenCommands, CancelCommand, group_name="diviner", source="diviner"):
     @app_commands.command(name="divine", description="Divine a house tonight: Detection or Vision")
     @app_commands.describe(target="Someone who lives in the house", method="What to divine")
     @app_commands.choices(method=[app_commands.Choice(name="Detection - who left the house", value="detection"),
@@ -94,7 +94,3 @@ class DivinerCommands(CovenCommands, group_name="diviner", source="diviner"):
     @app_commands.describe(target="Someone who lives in the house", start="HH:MM (24-hour), in the future")
     async def scry(self, interaction: discord.Interaction, target: discord.Member, start: str) -> None:
         await self.use(interaction, "scry", target=target, start=start)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's divination")
-    async def cancel_divine(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "divine")

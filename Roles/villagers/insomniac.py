@@ -6,7 +6,6 @@ class Insomniac(Role):
     name = "insomniac"
     display = "Insomniac"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "During the day you choose what you'll lie awake listening for tonight: how many of your family members "
         "leave the house, or how many people visit your family (any number of werewolves sounds like one wolf). "

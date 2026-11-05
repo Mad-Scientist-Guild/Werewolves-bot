@@ -51,12 +51,8 @@ class ShadowWolf(Role):
                 visit.blocked, visit.reason = True, "forced back by the Shadow wolf"
 
 
-class ShadowWolfCommands(RoleCommands, group_name="shadow_wolf", source="shadow_wolf"):
+class ShadowWolfCommands(RoleCommands, CancelCommand, group_name="shadow_wolf", source="shadow_wolf"):
     @app_commands.command(name="stalk", description="Wait outside a player's house tonight")
     @app_commands.describe(target="Who to stalk (never the same player twice)")
     async def stalk(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "stalk", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's stalking")
-    async def cancel_stalk(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "stalk")

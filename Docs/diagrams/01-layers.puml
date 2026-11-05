@@ -25,7 +25,7 @@ package "Services (glue)" {
 
 package "Core (pure engine, no Discord)" {
   [state\nGameState dataclasses] as State
-  [actions / resolution / flow\nvoting / access / clock / realtime] as Engine
+  [actions / resolution / players / lifecycle\ntransitions / lynch / decisions / gm_tools\nvoting / access / clock / realtime] as Engine
   [Roles\nRole + Modifier classes] as Roles
 }
 

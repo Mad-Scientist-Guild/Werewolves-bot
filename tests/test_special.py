@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from Core import actions, flow, realtime, voting
+from Core import actions, gm_tools, realtime, voting
 from Core.access import Access, player_access
 from Core.effects import Announcement, PrivateMessage, QuestionPrompt, TelepathPrompt
 from Core.errors import GameError
@@ -113,14 +113,14 @@ def test_betrayed_lover_becomes_a_vengeful_spirit():
 def test_revived_lover_returns_to_original_faction():
     g = lovers_game(); g.night(); g.newspaper(); g.dusk()
     pack(g, "a", "w1", "w2"); g.night()
-    flow.gm_revive(g.state, g.id("a"))
+    gm_tools.gm_revive(g.state, g.id("a"))
     assert g.p("a").true_faction() == "villagers"
 
 
 def test_lovers_win_when_they_are_the_last():
     g = lovers_game(); g.night()
     for name in ("w1", "w2", "v1", "v2", "v3"):
-        flow.gm_kill(g.state, g.id(name))
+        gm_tools.gm_kill(g.state, g.id(name))
     assert "lovers" in winners(g.state)
 
 
@@ -181,7 +181,7 @@ def test_spirit_gets_three_nights():
 
 def test_gm_kills_dont_make_spirits():
     g = spirit_game()
-    flow.gm_kill(g.state, g.id("a"))
+    gm_tools.gm_kill(g.state, g.id("a"))
     assert not g.p("a").has_modifier("vengeful_spirit")
 
 

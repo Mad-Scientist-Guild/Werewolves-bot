@@ -6,7 +6,6 @@ class Seer(Role):
     name = "seer"
     display = "Seer"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Each night, choose one person and learn their faction (Werewolves, Undead, Coven, Lovers or Villagers). "
         "If you choose someone you've looked into before, you learn their exact role instead."
@@ -35,12 +34,8 @@ class Seer(Role):
             ctx.commit(lambda: self.checked.append(target))
 
 
-class SeerCommands(RoleCommands, group_name="seer", source="seer"):
+class SeerCommands(RoleCommands, CancelCommand, group_name="seer", source="seer"):
     @app_commands.command(name="check", description="Learn a player's faction tonight (their role if checked before)")
     @app_commands.describe(target="Who to look into")
     async def check(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "check", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's vision")
-    async def cancel_check(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "check")

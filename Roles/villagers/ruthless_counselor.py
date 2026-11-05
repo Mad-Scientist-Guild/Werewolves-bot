@@ -6,7 +6,6 @@ class RuthlessCounselor(Role):
     name = "ruthless_counselor"
     display = "Ruthless Counselor"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Twice per game - never two days in a row - you can call a second lynch right after the first one. All "
         "discussion and faction channels go into lockdown (private channels excepted) until its result is posted. "
@@ -27,11 +26,7 @@ class RuthlessCounselor(Role):
         ctx.note("Notes", "The Ruthless Counselor calls a second lynch")
 
 
-class RuthlessCounselorCommands(RoleCommands, group_name="ruthless_counselor", source="ruthless_counselor"):
+class RuthlessCounselorCommands(RoleCommands, CancelCommand, group_name="ruthless_counselor", source="ruthless_counselor"):
     @app_commands.command(name="second_lynch", description="Call a second lynch right after today's (2× per game)")
     async def second_lynch(self, interaction: discord.Interaction) -> None:
         await self.use(interaction, "second_lynch")
-
-    @app_commands.command(name="cancel", description="Don't call a second lynch after all")
-    async def cancel_second(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "second_lynch")

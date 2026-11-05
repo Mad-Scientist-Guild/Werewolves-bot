@@ -103,12 +103,8 @@ def first_deaths_become_spirits(ctx: Resolution) -> None:
                              any_werewolf=record.killer_role == "werewolves", reason="among the first to die")
 
 
-class VengefulSpiritCommands(RoleCommands, group_name="vengeful_spirit", source="vengeful_spirit"):
+class VengefulSpiritCommands(RoleCommands, CancelCommand, group_name="vengeful_spirit", source="vengeful_spirit"):
     @app_commands.command(name="avenge", description="Name who killed you (once) - if you're right, they die")
     @app_commands.describe(target="Your killer")
     async def avenge(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "avenge", target=target)
-
-    @app_commands.command(name="cancel", description="Take back tonight's guess")
-    async def cancel_avenge(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "avenge")

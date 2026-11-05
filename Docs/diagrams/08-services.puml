@@ -11,7 +11,7 @@ class Runtime <<singleton runtime>> {
 class GameService {
   db: Database
   handles: dict[guild_id, GameHandle]
-  listeners: list
+  on_change: callback
   --
   load_all()
   find(guild) / get(guild) / all()
@@ -82,7 +82,7 @@ Runtime --> Database
 GameService "1" *-- "*" GameHandle
 GameService --> Database
 GameService ..> Codec
-GameService ..> GameWorker : listener: wake(handle)
+GameService ..> GameWorker : on_change = wake(handle)
 GameWorker --> ChannelManager
 GameWorker --> EffectDelivery
 GameWorker ..> AuditPoster : wake

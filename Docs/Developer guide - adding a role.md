@@ -37,7 +37,6 @@ class Seer(Role):
     name = "seer"
     display = "Seer"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = "Each night, learn the faction of one player..."
     abilities = (
         Ability("check", Timing.NIGHT, "Learn a player's faction",
@@ -52,8 +51,8 @@ class Seer(Role):
         ctx.commit(lambda: self.checked.append(target))   # change state only through commit
 
 
-# 2. the slash commands (thin wrappers)
-class SeerCommands(RoleCommands, group_name="seer", source="seer"):
+# 2. the slash commands (thin wrappers); CancelCommand adds `/seer cancel`
+class SeerCommands(RoleCommands, CancelCommand, group_name="seer", source="seer"):
     @app_commands.command(name="check", description="Learn a player's faction tonight")
     async def check(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "check", target=target)
@@ -102,7 +101,7 @@ flowchart LR
 | `assignable = False` for roles nobody starts with | E.g. the plain `werewolf`. These aren't in the default role pool. |
 
 The default role pool is one of every assignable role (three Brothers). If a new role should appear more than
-once by default, add it to `DEFAULT_COUNTS` in [Core/flow.py](../Core/flow.py). To keep it out of the default
+once by default, add it to `DEFAULT_COUNTS` in [Core/lifecycle.py](../Core/lifecycle.py). To keep it out of the default
 pool, add it to `NOT_IN_DEFAULT`.
 
 ---
@@ -124,7 +123,6 @@ Ability(
     once_per_cycle=True,       # INSTANT abilities: once per day
     usable_while_dead=False,   # e.g. the Vengeful Spirit
     phases=(),                 # INSTANT only: allowed phases ("day", "night", "sleep")
-    consume_on_block=False,    # does a blocked attempt cost a use?
     first_day=False,           # nothing happens on day 1 unless this is True
 )
 ```
@@ -135,12 +133,10 @@ Ability(
 |---|---|---|
 | `P.living(name, desc, allow_self=False)` | user id | exists, alive, not self (unless allowed) |
 | `P.dead(...)` | user id | dead (not a living skeleton) |
-| `P.any_player(...)` | user id | exists |
 | `P.role(...)` | role name | known role |
 | `P.choice(name, ("a", "b"), desc)` | lower-case choice | one of the choices |
 | `P.text(name, desc, max_words=20)` | text | word limit |
 | `P.time(...)` | `"HH:MM"` | valid time |
-| `P.family(...)` | chat key | is a family |
 
 Every param can be `required=False`. Player params end up in `action.targets`, in declaration order, and every
 param is in `action.params`.
@@ -154,8 +150,8 @@ param is in `action.params`.
 | `ANYTIME` | always | the next resolution moment | 19:00 or 08:00 |
 | `INSTANT` | in `phases` | immediately | immediately |
 
-Using the same ability again before it resolves **replaces** the earlier choice. A player can cancel with
-`self.cancel(...)`.
+Using the same ability again before it resolves **replaces** the earlier choice. A player can take an action
+back with `/<group> cancel` (see section 9).
 
 ```mermaid
 flowchart LR
@@ -185,9 +181,9 @@ flowchart TD
     F["resolve_ABILITY for every action not blocked<br/>(evaluation: read state, emit intents)"] --> G
     subgraph COMMIT [commit pass - the only place state changes]
         G["mark actions resolved / blocked, consume uses"] --> H
-        H["commits with order below 60 (EARLY, NORMAL)"] --> I
+        H["commits, in the order they were registered"] --> I
         I["kills: protections, then deaths + cascade<br/>(on_other_killed, on_death, on_other_death...)"] --> J
-        J["commits with order 60 and up (LATE)"] --> K
+        J["commits registered with after_deaths=True"] --> K
         K["after_resolution on every actor"] --> L
         L["final hooks (win check, Vengeful Spirits)"] --> M
         M["messages become PrivateMessage effects"]
@@ -258,8 +254,8 @@ for actors of *dead* players.
 | `ctx.target_of(action, param="target")` | the (possibly redirected) target |
 | `ctx.apparent_faction(pid, observer)` / `ctx.apparent_role(...)` | what an investigation sees |
 | `ctx.visitors_of(pid)` | visits that reached that player (not blocked) |
-| `ctx.visits_by(pid)` / `ctx.left_house(pid)` | movement; a blocked exit still counts as leaving |
-| `ctx.actions_by(pid)` / `ctx.action_of(source, ability)` / `ctx.ability_of(action)` | other actions this resolution |
+| `ctx.left_house(pid)` | movement; a blocked exit still counts as leaving |
+| `ctx.actions_by(pid)` / `ctx.ability_of(action)` | other actions this resolution |
 | `ctx.flags` | a scratch dict shared by everything in this resolution |
 | `ctx.choice(ids)` / `ctx.rng` | seeded randomness (preview = final); never use `random` directly |
 
@@ -268,11 +264,11 @@ for actors of *dead* players.
 | Member | Does |
 |---|---|
 | `ctx.inform(pid, text)` | private message, delivered when the resolution is applied |
-| `ctx.attack(target, cause, killers=, killer_role=, attacker_faction=, enters_house=True, unstoppable=False, public=False, action=)` | queue a kill; returns the `Attack` (check `attack.prevented_by` in a LATE commit) |
+| `ctx.attack(target, cause, killers=, killer_role=, attacker_faction=, enters_house=True, unstoppable=False, public=False, action=)` | queue a kill; returns the `Attack` (check `attack.prevented_by` in an `after_deaths` commit) |
 | `ctx.protect(target, label, applies=lambda attack: ..., first=False)` | register a protection (interaction pass) |
 | `ctx.block(action, reason)` | stop an action (and its visit) |
 | `ctx.redirect(action, new_target, reason=)` | change an action's target |
-| `ctx.commit(fn, order=Resolution.EARLY / NORMAL / LATE)` | run `fn` in the commit pass; LATE runs after deaths |
+| `ctx.commit(fn, after_deaths=False)` | run `fn` in the commit pass, in registration order; `after_deaths=True` runs it after this moment's deaths (the Witch's revive "after the lynch") |
 | `ctx.convert(kind, target, by=)` | apply a registered conversion and notify everyone (`register_conversion`) |
 | `ctx.turn_prevented(target, attacker_faction=, killers=)` | do protections stop a turn? |
 | `ctx.claim(kind, target, me)` + `ctx.claim_winner(kind, target)` | competing claims (Ancient wolf vs Vampire Lord), seeded |
@@ -292,19 +288,19 @@ for actors of *dead* players.
 
 | Helper | From | Use |
 |---|---|---|
-| `set_role(state, player, name, keep_faction=, note=, reason=)` | `Core/flow.py` | give a fresh role (Grave Robber) — emits a role card |
-| `adopt_role(state, player, role, reason=, note=)` | `Core/flow.py` | give a *copy* of a role instance, charges included (Apprentice) |
-| `add_modifier(state, player, name, reason=, **fields)` / `remove_modifier(...)` | `Core/flow.py` | stackable additions (Lover, Turned wolf) |
-| `add_condition(state, player, key, source=, expires="morning:5", **data)` | `Core/flow.py` | temporary markers. Key `"protection"` with `label=`, `turn=` is a night protection checked automatically (Priest, Enchantress). |
-| `join_chat(state, player, key)` / `register_chat(key, kind, channel_name)` | `Core/flow.py` | shared chats; or declare `chats = ("wolves",)` on the class |
+| `set_role(state, player, name, keep_faction=, note=, reason=)` | `Core/players.py` | give a fresh role (Grave Robber) — emits a role card |
+| `adopt_role(state, player, role, reason=, note=)` | `Core/players.py` | give a *copy* of a role instance, charges included (Apprentice) |
+| `add_modifier(state, player, name, reason=, **fields)` / `remove_modifier(...)` | `Core/players.py` | stackable additions (Lover, Turned wolf) |
+| `add_condition(state, player, key, source=, expires="morning:5", **data)` | `Core/players.py` | temporary markers. Key `"protection"` with `label=`, `turn=` is a night protection checked automatically (Priest, Enchantress). |
+| `join_chat(state, player, key)` / `register_chat(key, kind, channel_name)` | `Core/players.py` | shared chats; or declare `chats = ("wolves",)` on the class |
 | `state.ensure_chat(key, kind, name)` | `Core/state.py` | a chat made during the game (the channel is created automatically) |
 | `state.house_of(pid)` / `state.house_members(house)` / `state.housemates(pid)` | `Core/state.py` | a house is a family |
 | `state.player(pid)`, `state.name(pid)`, `state.alive_players()`, `state.players_with_role(name)` | `Core/state.py` | lookups |
-| `seed(state, key)` | `Core/flow.py` | a stored seed for one-off randomness (Normal wolf hint) |
+| `seed(state, key)` | `Core/players.py` | a stored seed for one-off randomness (Normal wolf hint) |
 | `PrivateMessage`, `RoleCard`, `ChatMessage`, `Announcement` (`state.emit(...)`) | `Core/effects.py` | messages outside `ctx.inform` |
 | `register_conversion(kind, fn)` / `CONVERSIONS` | `Core/resolution.py` | define a conversion (`werewolf`, `vampire`, `skeleton`, `changeling`) |
 | `register_prepare_hook(fn)` / `register_final_hook(fn)` | `Core/resolution.py` | game-wide rules (wolf pack, first-death spirits) |
-| `flow.create_decision(...)` + `flow.DECISION_HANDLERS[kind] = fn` | `Core/flow.py` | ask a player (or the GMs) to choose via a menu |
+| `decisions.create_decision(...)` + `decisions.DECISION_HANDLERS[kind] = fn` | `Core/decisions.py` | ask a player (or the GMs) to choose via a menu |
 | `realtime.schedule_eavesdrop`, `ask_the_dead`, `ask_player`, `send_telepath_message` | `Core/realtime.py` | eavesdropping, yes/no questions, anonymous messages |
 | `self.player(state)`, `self.setting(state, key, default)`, `self.uses_left(...)` | `Core/actor.py` | on every actor |
 
@@ -327,7 +323,6 @@ classDiagram
     }
     class Role {
         faction
-        tags
         assignable
     }
     class Modifier {
@@ -357,7 +352,7 @@ classDiagram
 ## 9. Commands
 
 ```python
-class WitchCommands(RoleCommands, group_name="witch", source="witch"):
+class WitchCommands(RoleCommands, CancelCommand, group_name="witch", source="witch"):
     @app_commands.command(name="poison", description="Use your potion of death tonight")
     @app_commands.describe(target="Who to poison")
     async def poison(self, interaction: discord.Interaction, target: discord.Member) -> None:
@@ -370,7 +365,9 @@ class WitchCommands(RoleCommands, group_name="witch", source="witch"):
   - stores the action, saves, logs and replies.
 
   Members become user ids automatically, and `app_commands.Choice` becomes its value.
-- `self.cancel(interaction, ability_key)` cancels a pending action.
+- The `CancelCommand` mixin adds `/<group> cancel [ability]`, which takes back a pending action of this group.
+  The ability only has to be given when the player has several pending (autocomplete lists them). Leave the
+  mixin out for roles whose abilities are all instant.
 - `GameError("message")` raised anywhere ends up as a red ephemeral reply, and is logged as rejected.
 - Shared commands for several roles: a base with `abstract=True`. See `CovenCommands` in `Roles/coven/_coven.py`:
   every coven role's group gets `/find` and `/kill_list`.
@@ -431,7 +428,6 @@ class Watchman(Role):
     name = "watchman"
     display = "Watchman"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Every other night you can keep watch outside someone's door: the next morning you learn how many people "
         "visited them. Keeping watch means leaving your own house."
@@ -457,7 +453,7 @@ class Watchman(Role):
         ctx.commit(lambda: setattr(self, "rested_until", ctx.state.day + 2))   # state changes in a commit
 
 
-class WatchmanCommands(RoleCommands, group_name="watchman", source="watchman"):
+class WatchmanCommands(RoleCommands, CancelCommand, group_name="watchman", source="watchman"):
     @app_commands.command(name="watch", description="Count how many people visit a player tonight")
     @app_commands.describe(target="Whose door to watch")
     async def watch(self, interaction: discord.Interaction, target: discord.Member) -> None:

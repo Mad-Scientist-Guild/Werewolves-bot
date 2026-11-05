@@ -57,14 +57,10 @@ class Curseweaver(CovenRole):
             self.last_target = ctx.flags.get(f"cursed_by:{self.owner}")
 
 
-class CurseweaverCommands(CovenCommands, group_name="curseweaver", source="curseweaver"):
+class CurseweaverCommands(CovenCommands, CancelCommand, group_name="curseweaver", source="curseweaver"):
     @app_commands.command(name="curse", description="Curse a player tonight")
     @app_commands.describe(target="Who to curse", curse="Which curse")
     @app_commands.choices(curse=[app_commands.Choice(name=label, value=key) for key, label in CURSES.items()])
     async def curse(self, interaction: discord.Interaction, target: discord.Member,
                     curse: app_commands.Choice[str]) -> None:
         await self.use(interaction, "curse", target=target, curse=curse)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's curse")
-    async def cancel_curse(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "curse")

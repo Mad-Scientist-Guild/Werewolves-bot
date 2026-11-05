@@ -15,7 +15,7 @@ Order of a resolution:
                           (locks, stalks, protections - may block visits)
   5. on_visited hooks
   6. evaluation pass      resolve_<ability> for every action that wasn't blocked
-  7. commit pass          early commits -> kills + death cascade -> late commits
+  7. commit pass          commits -> kills + death cascade -> after_deaths commits
                           -> after_resolution hooks -> messages
 """
 from __future__ import annotations
@@ -97,13 +97,6 @@ class Report:
         return "\n".join(parts)
 
 
-@dataclass
-class Outcome:
-    report: str
-    deaths: list[tuple[int, str]]
-    messages: dict[int, list[str]]
-
-
 # hooks run at the start of every resolution, e.g. the wolf pack's attack.
 # Signature: hook(ctx) -> None
 PREPARE_HOOKS: list[Callable[["Resolution"], None]] = []
@@ -132,14 +125,10 @@ def register_conversion(kind: str, fn: Callable[["Resolution", int, int], None])
 
 
 class Resolution:
-    EARLY = 20
-    NORMAL = 50
-    LATE = 80        # after deaths (e.g. revives "after the lynch")
-
     def __init__(self, state: GameState, *, kind: str, moment: str, seed: int, title: str,
                  actions: Sequence[SubmittedAction] | None = None):
         self.state = state
-        self.kind = kind                 # "night" | "dusk" | "instant"
+        self.kind = kind                 # "night" | "dusk" | "lynch" | "instant"
         self.moment = moment
         self.rng = random.Random(seed)
         self.report = Report(title)
@@ -156,7 +145,8 @@ class Resolution:
         self.redirects: dict[int, int] = {}                 # action id -> new target
         self.claims: dict[tuple[str, int], list[int]] = {}  # (kind, target) -> claimants
         self._claim_winners: dict[tuple[str, int], int] = {}
-        self._commits: list[tuple[int, int, Callable[[], None]]] = []
+        self._commits: list[Callable[[], None]] = []
+        self._commits_after_deaths: list[Callable[[], None]] = []
         self._keep_use: set[int] = set()
         self._resolved: set[int] = set()
 
@@ -193,9 +183,11 @@ class Resolution:
         self.attacks.append(attack)
         return attack
 
-    def commit(self, fn: Callable[[], None], *, order: int = NORMAL) -> None:
-        """Run `fn` in the commit pass. All state changes go through here."""
-        self._commits.append((order, len(self._commits), fn))
+    def commit(self, fn: Callable[[], None], *, after_deaths: bool = False) -> None:
+        """Run `fn` in the commit pass. All state changes go through here.
+        Commits run in the order they were registered; `after_deaths` ones run
+        once this moment's attacks have been applied (e.g. a revive "after the lynch")."""
+        (self._commits_after_deaths if after_deaths else self._commits).append(fn)
 
     def protect(self, target: int, label: str, applies: Callable[[Attack], bool] | None = None, *,
                 first: bool = False) -> None:
@@ -298,12 +290,6 @@ class Resolution:
     def actions_by(self, player_id: int) -> list[SubmittedAction]:
         return [a for a in self.actions if a.actor == player_id]
 
-    def action_of(self, source: str, ability: str | None = None) -> list[SubmittedAction]:
-        return [a for a in self.actions if a.source == source and (ability is None or a.ability == ability)]
-
-    def visits_by(self, player_id: int, *, include_blocked: bool = True) -> list[Visit]:
-        return [v for v in self.visits if v.visitor == player_id and (include_blocked or not v.blocked)]
-
     def visitors_of(self, player_id: int) -> list[Visit]:
         """Visits that actually reached this player's house."""
         return [v for v in self.visits if v.target == player_id and not v.blocked]
@@ -331,11 +317,9 @@ class Resolution:
         """Deterministic random pick (seeded) from player ids."""
         return self.rng.choice(sorted(options)) if options else None
 
-    def pending_attacks_on(self, target: int) -> list[Attack]:
-        return [k for k in self.attacks if k.target == target and k.prevented_by is None]
-
     # --- pipeline ----------------------------------------------------------
-    def run(self) -> Outcome:
+    def run(self) -> str:
+        """Resolve everything and return the GM report."""
         self._fail_unusable()
         if self.kind == "night":
             for override in self.state.night_overrides:
@@ -363,11 +347,7 @@ class Resolution:
 
         self._evaluation_pass()
         self._commit_pass()
-        return Outcome(
-            report=self.report.render(),
-            deaths=[(p.user_id, r.cause) for p, r in self.deaths],
-            messages=self.messages,
-        )
+        return self.report.render()
 
     def _fail_unusable(self) -> None:
         usable: list[SubmittedAction] = []
@@ -434,10 +414,7 @@ class Resolution:
         # status + use bookkeeping happens first so commits can inspect it
         for action in self.actions:
             actor = self.actor_for(action)
-            ability = actor.ability(action.ability) if actor else None
             if self.is_blocked(action):
-                if ability and ability.consume_on_block and action.id not in self._keep_use:
-                    actor.consume(self.state, action.ability)
                 self._finish(action, ActionStatus.BLOCKED, self.blocked[action.id])
                 if self.state.settings.notify_blocked_actions and self.kind in ("night", "dusk"):
                     # the reason stays in the GM report; players only learn that it didn't work
@@ -448,9 +425,9 @@ class Resolution:
                     actor.consume(self.state, action.ability)
                 self._finish(action, ActionStatus.RESOLVED, action.note)
 
-        self._run_commits(lambda order: order < 60)
+        self._run_commits(self._commits)
         self._process_attacks()
-        self._run_commits(lambda order: order >= 60)
+        self._run_commits(self._commits_after_deaths)
         self._process_attacks()
 
         for player, actor in list(self.state.iter_actors()):
@@ -463,11 +440,10 @@ class Resolution:
             title = {"night": "Last night", "dusk": "This evening"}.get(self.kind, "")
             self.state.emit(PrivateMessage(player=player_id, text="\n".join(texts), title=title))
 
-    def _run_commits(self, select: Callable[[int], bool]) -> None:
-        pending = sorted((c for c in self._commits if select(c[0])), key=lambda c: (c[0], c[1]))
-        self._commits = [c for c in self._commits if not select(c[0])]
-        for _, _, fn in pending:
-            fn()
+    @staticmethod
+    def _run_commits(queue: list[Callable[[], None]]) -> None:
+        while queue:
+            queue.pop(0)()
 
     def _finish(self, action: SubmittedAction, status: ActionStatus, note: str) -> None:
         action.status = status
@@ -573,7 +549,7 @@ class Resolution:
             actor.on_revived(self)
         replacement = player.condition("becomes_on_revive")
         if replacement is not None:
-            from Core.flow import set_role
+            from Core.players import set_role
             player.remove_condition("becomes_on_revive")
             set_role(self.state, player, replacement.data["role"], keep_faction=True,
                      reason=replacement.data.get("reason", "revived"))
@@ -591,6 +567,6 @@ def describe_action(state: GameState, action: SubmittedAction) -> str:
 
 
 def run_resolution(state: GameState, *, kind: str, moment: str, seed: int, title: str,
-                   actions: Sequence[SubmittedAction] | None = None) -> Outcome:
+                   actions: Sequence[SubmittedAction] | None = None) -> str:
     return Resolution(state, kind=kind, moment=moment, seed=seed, title=title, actions=actions).run()
 

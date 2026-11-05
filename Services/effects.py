@@ -14,9 +14,7 @@ from discord.ext import commands
 from Core.actor import ROLE_REGISTRY
 from Core.effects import (
     Announcement,
-    CreateChannel,
     DecisionPrompt,
-    DirectMessage,
     Effect,
     ChatMessage,
     NewspaperPost,
@@ -116,13 +114,8 @@ class EffectDelivery:
         elif isinstance(effect, RoleCard):
             channel = self._private(guild, state, effect.player)
             await channel.send(embed=role_card(state, effect))
-        elif isinstance(effect, CreateChannel):
-            await self.channels.ensure_chat_channels(guild, handle)
         elif isinstance(effect, DecisionPrompt):
             await self._decision(guild, handle, effect.decision_id)
-        elif isinstance(effect, DirectMessage):
-            user = guild.get_member(effect.user_id) or await self.bot.fetch_user(effect.user_id)
-            await user.send(effect.text)
         elif isinstance(effect, QuestionPrompt):
             question = next((s for s in state.questions if s.id == effect.question_id), None)
             if question is None or question.done:
@@ -157,11 +150,7 @@ class EffectDelivery:
             channel = self._private(guild, state, decision.chooser)
         else:
             channel = self._channel(guild, state.channels.get("mod_log"))
-        message = await channel.send(embed=decision_embed(state, decision), view=decision_view(state, decision))
-        async with self.games.mutate(guild.id) as mutable:
-            for d in mutable.decisions:
-                if d.id == decision_id:
-                    d.message_id = message.id
+        await channel.send(embed=decision_embed(state, decision), view=decision_view(state, decision))
 
 
 def role_card(state: GameState, effect: RoleCard) -> discord.Embed:

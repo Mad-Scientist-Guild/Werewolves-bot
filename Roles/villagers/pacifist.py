@@ -6,7 +6,6 @@ class Pacifist(Role):
     name = "pacifist"
     display = "Pacifist"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once per game you can stop the whole lynch vote: nobody is lynched that day. You learn the faction of the "
         "person who was about to be lynched. You can't stop the Ruthless Counselor's second lynch."
@@ -32,11 +31,7 @@ class Pacifist(Role):
             ctx.inform(self.owner, "You stopped the vote, but nobody was about to be lynched.")
 
 
-class PacifistCommands(RoleCommands, group_name="pacifist", source="pacifist"):
+class PacifistCommands(RoleCommands, CancelCommand, group_name="pacifist", source="pacifist"):
     @app_commands.command(name="stop", description="Stop today's lynch vote (once per game)")
     async def stop(self, interaction: discord.Interaction) -> None:
         await self.use(interaction, "stop")
-
-    @app_commands.command(name="cancel", description="Let the vote go on after all")
-    async def cancel_stop(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "stop")

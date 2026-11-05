@@ -6,7 +6,6 @@ class Vigilante(Role):
     name = "vigilante"
     display = "Vigilante"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a night you can pick another player to kill. If you kill a Villager (the Cultist counts as one), you "
         "die of guilt the same night. A Shadow wolf waiting outside your house dies, and you still go on to kill "
@@ -34,15 +33,11 @@ class Vigilante(Role):
             if attack.processed and attack.prevented_by is None:
                 ctx.attack(self.owner, "guilt", killers=[self.owner], killer_role=self.name, enters_house=False)
 
-        ctx.commit(guilt, order=Resolution.LATE)
+        ctx.commit(guilt, after_deaths=True)
 
 
-class VigilanteCommands(RoleCommands, group_name="vigilante", source="vigilante"):
+class VigilanteCommands(RoleCommands, CancelCommand, group_name="vigilante", source="vigilante"):
     @app_commands.command(name="shoot", description="Kill a player tonight (die of guilt if they're a villager)")
     @app_commands.describe(target="Who to kill")
     async def shoot(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "shoot", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's kill")
-    async def cancel_shoot(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "shoot")

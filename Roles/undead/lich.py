@@ -58,7 +58,7 @@ class Lich(Role):
                          unstoppable=True, enters_house=False)
 
 
-class LichCommands(RoleCommands, group_name="lich", source="lich"):
+class LichCommands(RoleCommands, CancelCommand, group_name="lich", source="lich"):
     @app_commands.command(name="raise", description="Guess the roles of up to two dead players to raise them")
     @app_commands.describe(first="A dead player", first_role="Your guess for their role",
                            second="Another dead player", second_role="Your guess for their role")
@@ -67,7 +67,3 @@ class LichCommands(RoleCommands, group_name="lich", source="lich"):
                          second: discord.Member | None = None, second_role: str | None = None) -> None:
         await self.use(interaction, "raise", first=first, first_role=first_role, second=second,
                        second_role=second_role)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's raising")
-    async def cancel_raise(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "raise")

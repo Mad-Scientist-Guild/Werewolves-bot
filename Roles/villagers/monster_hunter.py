@@ -1,5 +1,4 @@
 from Roles.role import *
-from Services.runtime import runtime
 
 
 @register_role
@@ -7,7 +6,6 @@ class MonsterHunter(Role):
     name = "monster_hunter"
     display = "Monster Hunter"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "First you need to find the Silver Angel: once a night, point at a player to check whether they are the "
         "Silver Angel. Once you've found them you have silver, and every night you can point at a player and kill "
@@ -49,7 +47,7 @@ class MonsterHunter(Role):
             ctx.note("Kills", f"The Monster Hunter hunted {ctx.state.name(target)}, who isn't evil - nothing happens")
 
 
-class MonsterHunterCommands(RoleCommands, group_name="monster_hunter", source="monster_hunter"):
+class MonsterHunterCommands(RoleCommands, CancelCommand, group_name="monster_hunter", source="monster_hunter"):
     @app_commands.command(name="search", description="Check whether a player is the Silver Angel")
     @app_commands.describe(target="Who might be the Silver Angel")
     async def search(self, interaction: discord.Interaction, target: discord.Member) -> None:
@@ -59,8 +57,3 @@ class MonsterHunterCommands(RoleCommands, group_name="monster_hunter", source="m
     @app_commands.describe(target="Who to hunt")
     async def hunt(self, interaction: discord.Interaction, target: discord.Member) -> None:
         await self.use(interaction, "hunt", target=target)
-
-    @app_commands.command(name="cancel", description="Cancel tonight's search or hunt")
-    async def cancel_action(self, interaction: discord.Interaction) -> None:
-        role = runtime.games.get(interaction.guild_id).state.player(interaction.user.id).role
-        await self.cancel(interaction, "hunt" if getattr(role, "has_silver", False) else "search")

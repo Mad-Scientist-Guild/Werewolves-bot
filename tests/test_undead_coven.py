@@ -1,6 +1,6 @@
 import pytest
 
-from Core import flow
+from Core import gm_tools
 from Core.access import Access, player_access
 from Core.errors import GameError
 from Core.factions import winners
@@ -64,7 +64,7 @@ def test_lich_only_dies_by_lynch_and_takes_the_skeletons_along():
 def test_dead_skeleton_never_rises_again():
     g = lich_game()
     g.act("lich", "raise", first="seery", first_role="seer"); g.night()
-    flow.gm_kill(g.state, g.id("seery"))
+    gm_tools.gm_kill(g.state, g.id("seery"))
     g.newspaper(); g.dusk()
     with pytest.raises(GameError):
         g.act("lich", "raise", first="seery", first_role="seer")
@@ -141,7 +141,7 @@ def test_undead_win():
     g.act("lich", "raise", first="seery", first_role="seer", second="angie", second_role="silver_angel")
     g.night()
     for name in ("w1", "w2", "v1", "v2"):
-        flow.gm_kill(g.state, g.id(name))
+        gm_tools.gm_kill(g.state, g.id(name))
     assert "undead" in winners(g.state)       # lich + 2 skeletons vs 1 living villager
 
 
@@ -317,7 +317,7 @@ def test_changeling_grows_up_after_three_nights_and_joins_the_hag():
 def test_changeling_withers_if_the_hag_mother_dies():
     g = coven_game()
     g.act("hag", "changeling", target="a"); g.night()
-    flow.gm_kill(g.state, g.id("hag"))
+    gm_tools.gm_kill(g.state, g.id("hag"))
     for _ in range(3):
         g.newspaper(); g.dusk(); g.night()
     assert not g.p("a").modifier("changeling").grown and g.p("a").true_faction() == "villagers"

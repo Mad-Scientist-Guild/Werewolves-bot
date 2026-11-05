@@ -6,7 +6,6 @@ class OldHunter(Role):
     name = "old_hunter"
     display = "Old Hunter"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     description = (
         "Once a night you can coat your sword in wolfsbane (your stash lasts 3 nights). If werewolves attack you - "
         "or try to turn you - while your sword is coated, you survive and one of the attacking wolves dies the next "
@@ -35,11 +34,7 @@ class OldHunter(Role):
         ctx.newspaper(f"A werewolf ({ctx.state.name(victim)}) was killed by the Old Hunter's wolfsbane.")
 
 
-class OldHunterCommands(RoleCommands, group_name="old_hunter", source="old_hunter"):
+class OldHunterCommands(RoleCommands, CancelCommand, group_name="old_hunter", source="old_hunter"):
     @app_commands.command(name="coat", description="Coat your sword in wolfsbane tonight (3× per game)")
     async def coat(self, interaction: discord.Interaction) -> None:
         await self.use(interaction, "coat")
-
-    @app_commands.command(name="cancel", description="Don't coat your sword tonight after all")
-    async def cancel_coat(self, interaction: discord.Interaction) -> None:
-        await self.cancel(interaction, "coat")

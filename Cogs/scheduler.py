@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands, tasks
 
-from Core import flow
+from Core import transitions
 from Core.clock import TransitionKind, now_in, transition_time
 from Services.game_service import GameHandle
 from Services.runtime import runtime
@@ -90,7 +90,7 @@ class Scheduler(commands.Cog):
         async with runtime.games.mutate(handle.guild_id, snapshot=f"before {kind.value} (day {handle.state.day})") as state:
             if manual_by is None and (state.next_transition is None or state.next_transition.kind != kind.value):
                 return  # someone else already ran it
-            result = flow.run_transition(state, kind, at)
+            result = transitions.run_transition(state, kind, at)
             for title, text in result.reports:
                 state.report(title, text)
             if late is not None and late > timedelta(minutes=2):

@@ -9,7 +9,6 @@ class Brother(Role):
     name = "brother"
     display = "Brother"
     faction = VILLAGERS
-    tags = frozenset({"villager_role"})
     chats = ("brothers",)
     description = (
         "The bond of Brothers transcends family. All Brothers share a private chat, so you know each other's role "
