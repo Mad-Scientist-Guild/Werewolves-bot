@@ -26,7 +26,7 @@ class Telepath(Role):
     def resolve_send(self, ctx: Resolution, action: SubmittedAction) -> None:
         target, text = action.params["target"], action.params["message"]
         now = datetime.fromisoformat(action.submitted_at)
-        ctx.commit(lambda: realtime.send_telepathy(ctx.state, self.owner, target, text, now))
+        ctx.commit(lambda: realtime.send_telepath_message(ctx.state, self.owner, target, text, now))
         ctx.inform(self.owner, f"Your message reached **{ctx.state.name(target)}**. If they answer, you'll hear it here.")
 
 

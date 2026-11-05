@@ -26,7 +26,7 @@ class Spiritualist(Role):
     def resolve_ask(self, ctx: Resolution, action: SubmittedAction) -> None:
         question = action.params["question"]
         now = datetime.fromisoformat(action.submitted_at)
-        ctx.commit(lambda: realtime.open_seance(ctx.state, self.owner, question, now))
+        ctx.commit(lambda: realtime.ask_the_dead(ctx.state, self.owner, question, now))
         ctx.inform(self.owner, f"You put your question to the dead: “{question}”. The answer comes when they've all "
                                "answered, or at 19:00/00:00 at the latest.")
 

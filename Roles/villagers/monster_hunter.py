@@ -43,7 +43,7 @@ class MonsterHunter(Role):
     def resolve_hunt(self, ctx: Resolution, action: SubmittedAction) -> None:
         target = ctx.target_of(action)
         if ctx.apparent_faction(target, self.name) in EVIL_FACTIONS:
-            ctx.kill(target, "monster_hunter", killers=[self.owner], killer_role=self.name,
+            ctx.attack(target, "monster_hunter", killers=[self.owner], killer_role=self.name,
                      attacker_faction=VILLAGERS, action=action)
         else:
             ctx.note("Kills", f"The Monster Hunter hunted {ctx.state.name(target)}, who isn't evil - nothing happens")

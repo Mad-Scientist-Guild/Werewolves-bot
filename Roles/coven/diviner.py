@@ -74,7 +74,7 @@ class Diviner(CovenRole):
         family = ctx.state.player(action.target).family
 
         def commit() -> None:
-            realtime.schedule_relay(ctx.state, self.owner, family, start, purpose="diviner", now=now)
+            realtime.schedule_eavesdrop(ctx.state, self.owner, family, start, purpose="diviner", now=now)
             self.scry_nights.append(ctx.state.day)
 
         ctx.commit(commit)

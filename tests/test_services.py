@@ -138,24 +138,13 @@ async def test_new_game_starts_with_the_default_role_pool(service):
     assert set(pool) == {n for n, c in ROLE_REGISTRY.items() if c.assignable and n != "villager"}
 
 
-def test_v1_state_migrates_categories():
-    import json
-    from Storage.codec import decode
-    from Core.state import GameState
-    from Core.serialize import dump
-    raw = dump(GameState(guild_id=1))
-    raw["categories"] = [111, 222]
-    state = decode(json.dumps(raw), version=1)
-    assert state.categories == {"legacy": [111, 222]}
-
-
 def test_channels_go_into_the_right_categories():
-    from Core.state import GroupKind
+    from Core.state import ChatKind
     from Services.channels import FIXED_CHANNEL_CATEGORY, category_key
-    assert category_key(GroupKind.VILLAGE) == category_key(GroupKind.DEAD) == "general"
-    assert category_key(GroupKind.FAMILY) == "families"
-    assert category_key(GroupKind.PRIVATE) == "roles"
-    assert {category_key(k) for k in (GroupKind.WOLVES, GroupKind.COVEN, GroupKind.LOVERS)} == {"factions"}
+    assert category_key(ChatKind.VILLAGE) == category_key(ChatKind.DEAD) == "general"
+    assert category_key(ChatKind.FAMILY) == "families"
+    assert category_key(ChatKind.PRIVATE) == "roles"
+    assert {category_key(k) for k in (ChatKind.WOLVES, ChatKind.COVEN, ChatKind.LOVERS)} == {"factions"}
     assert FIXED_CHANNEL_CATEGORY == {"announcements": "important", "mod_log": "gm"}
 
 

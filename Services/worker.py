@@ -52,7 +52,7 @@ class GameWorker:
                 continue
             try:
                 if handle.state.phase is not Phase.SETUP:
-                    await self.channels.ensure_group_channels(guild, handle)
+                    await self.channels.ensure_chat_channels(guild, handle)
                 await self.delivery.deliver(guild, handle)
                 await self.channels.sync(guild, handle)
             except Exception:

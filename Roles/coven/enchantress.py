@@ -79,24 +79,24 @@ class Enchantress(CovenRole):
             if charm == "open_book":
                 realtime.ask_player(state, self.owner, target, action.params["question"], now)
             elif charm == "protection":
-                add_status(state, player, "protection", source=self.owner, expires=expires,
+                add_condition(state, player, "protection", source=self.owner, expires=expires,
                            label="charmed by the Enchantress", turn=False)
                 self.protected.append(target)
             else:
-                add_status(state, player, "enchanted_revenge", source=self.owner, expires=expires)
+                add_condition(state, player, "enchanted_revenge", source=self.owner, expires=expires)
 
         ctx.commit(commit)
 
     def on_other_death(self, ctx: Resolution, dead: Player) -> None:
-        status = dead.status("enchanted_revenge")
-        if status is None or status.source != self.owner or ctx.kind != "night":
+        condition = dead.condition("enchanted_revenge")
+        if condition is None or condition.source != self.owner or ctx.kind != "night":
             return
         self.revenge_day = ctx.state.day + 1
         ctx.inform(self.owner, f"**{dead.display_name}**, whom you charmed with revenge, was killed. Today between "
                                "08:00 and 18:00 you may unleash your rage with `/enchantress revenge`.")
 
     def resolve_revenge(self, ctx: Resolution, action: SubmittedAction) -> None:
-        ctx.kill(action.params["target"], "enchantress", killers=[self.owner], killer_role=self.name,
+        ctx.attack(action.params["target"], "enchantress", killers=[self.owner], killer_role=self.name,
                  attacker_faction=COVEN, enters_house=False, action=action)
 
         def spent() -> None:

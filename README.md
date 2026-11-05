@@ -69,7 +69,7 @@ Every change re-runs the preview. If the 08:00 result differs from the last prev
 - `/gm status` and `/gm player` (everything about a player)
 - `/gm log` (search the audit log)
 - `/gm kill` / `/gm revive` / `/gm replace` (the Reaper)
-- `/gm set_role` / `/gm modifier` / `/gm group`
+- `/gm set_role` / `/gm modifier` / `/gm chat`
 - `/gm decide` (make a pending choice for someone)
 - `/gm clock pause|resume|advance|snapshots|rollback`
 - `/gm end_game` (works before the start too; everything is kept until `/game delete`, which asks for
@@ -99,10 +99,10 @@ These come from the GMs and are enforced in code:
 ## Architecture
 
 ```
-bot.py          startup, central error handling, automatic command logging
+bot.py          startup, central error handling, logging of failed commands
 Core/           the game engine - pure Python, no Discord, fully unit-tested
-  state.py        GameState / Player / Group (IDs only, serialisable)
-  actor.py        Role / Modifier base classes and registries
+  state.py        GameState / Player / Chat (IDs only, serialisable)
+  actor.py        RoleBase / Role / Modifier base classes and registries
   abilities.py    Ability / Param declarations
   actions.py      submitting and validating actions
   resolution.py   the resolution pipeline (night, dusk, instant)
@@ -161,7 +161,7 @@ copying it) can use `/seer check` too.
 
 Hooks a role can implement: `validate`, `interact_<ability>`, `resolve_<ability>`, `on_visited`,
 `protects_against`, `on_death`, `on_other_death`, `after_resolution`, `on_game_start`, `apparent_faction`,
-`apparent_role`, `available_abilities`. Shared chats come from `groups = ("wolves",)`. Numbers like uses can be
+`apparent_role`, `available_abilities`. Shared chats come from `chats = ("wolves",)`. Numbers like uses can be
 overridden per game by GMs (`/setup role_setting <role> uses.<ability> <n>`).
 
 Test a role with `tests/builder.py`:

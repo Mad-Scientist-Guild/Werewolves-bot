@@ -8,15 +8,15 @@ from discord.ext import commands
 from Core import flow
 from Core.clock import now_in, transition_time
 from Core.errors import GameError
-from Core.state import Phase, PublicStatus
+from Core.state import Phase, PublicRole
 from Services.discord_utils import embed, reply, require_gm
 from Services.runtime import runtime
 
 STATUS_LABELS = {
-    PublicStatus.NONE: "alive",
-    PublicStatus.DEAD: "dead",
-    PublicStatus.VENGEFUL_SPIRIT: "vengeful spirit",
-    PublicStatus.SKELETON: "skeleton",
+    PublicRole.NONE: "alive",
+    PublicRole.DEAD: "dead",
+    PublicRole.VENGEFUL_SPIRIT: "vengeful spirit",
+    PublicRole.SKELETON: "skeleton",
 }
 
 
@@ -79,7 +79,7 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
             raise GameError("Nobody has joined yet.")
         lines = []
         for player in sorted(state.players.values(), key=lambda p: p.display_name.lower()):
-            status = STATUS_LABELS[player.public_status] if state.phase is not Phase.SETUP else "joined"
+            status = STATUS_LABELS[player.public_role] if state.phase is not Phase.SETUP else "joined"
             mayor = " 🎩 Mayor" if state.mayor == player.user_id else ""
             lines.append(f"**{player.display_name}** — {status}{mayor}")
         await reply(interaction, "", embed_obj=embed(f"Players ({len(state.players)})", "\n".join(lines)))
@@ -110,9 +110,9 @@ class Game(commands.GroupCog, group_name="game", group_description="The werewolv
             missing = [p.display_name for p in state.players.values() if p.role is None]
             if missing:
                 raise GameError(f"These players have no role yet: {', '.join(missing)}")
-            flow.ensure_base_groups(state)
+            flow.ensure_base_chats(state)
         await runtime.channels.setup_base(interaction.guild, handle)
-        await runtime.channels.ensure_group_channels(interaction.guild, handle)
+        await runtime.channels.ensure_chat_channels(interaction.guild, handle)
         async with runtime.games.mutate(interaction.guild_id, snapshot="before game start") as state:
             flow.start_game(state, now_in(state))
         await reply(interaction, "The game has started! Role cards are being posted in the private channels.")

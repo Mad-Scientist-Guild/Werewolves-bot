@@ -1,8 +1,8 @@
 import pytest
 
-from Core import flow, voting
+from Core import flow
 from Core.actor import ROLE_REGISTRY
-from Core.effects import PrivateMessage, VoteChannelPost
+from Core.effects import VoteResults
 from Core.errors import GameError
 from Core.state import ActionStatus
 from tests.builder import GameBuilder
@@ -69,7 +69,7 @@ def test_apprentice_takes_over_the_fallen_wolf_with_its_charges():
     g.act("app", "take_over", target="feral")
     g.night()
     app = g.p("app")
-    assert app.role_name == "feral_wolf" and app.role.uses == {"eat": 1}
+    assert app.role_name == "feral_wolf" and app.role.uses_spent == {"eat": 1}
     assert app.role.owner == app.user_id
     assert app.original_role == "apprentice_wolf"
     # the fallen wolf comes back without abilities
@@ -121,7 +121,7 @@ def test_cunning_wolf_vote_is_published_under_another_name():
         g.vote(voter, "v1")
     g.dusk()
     assert not g.alive("v1")
-    published = [e.text for e in g.state.pending_effects if isinstance(e, VoteChannelPost)][-1]
+    published = [e.text for e in g.state.pending_effects if isinstance(e, VoteResults)][-1]
     assert "**cun** voted for **v2**" in published
 
 
@@ -158,7 +158,7 @@ def test_silver_angel_protects_against_the_feral_wolf():
     g.act("angel", "protect", target="v")
     g.night()
     assert g.alive("v")
-    assert g.p("feral").role.uses == {"eat": 1}   # an attempt that was stopped still counts
+    assert g.p("feral").role.uses_spent == {"eat": 1}   # an attempt that was stopped still counts
 
 
 # --- shadow wolf ----------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_shadow_wolf_stalked_player_keeps_limited_uses():
     g.act("shadow", "stalk", target="feral")
     g.night()
     assert g.alive("v")
-    assert g.p("feral").role.uses.get("eat", 0) == 0
+    assert g.p("feral").role.uses_spent.get("eat", 0) == 0
 
 
 def test_shadow_wolf_never_stalks_the_same_player_twice():

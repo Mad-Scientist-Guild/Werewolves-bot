@@ -6,7 +6,7 @@ class FeralWolf(Role):
     name = "feral_wolf"
     display = "Feral wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "Three times per game you can, on top of the pack's kill, go out alone and eat another player - of any "
@@ -21,7 +21,7 @@ class FeralWolf(Role):
     )
 
     def resolve_eat(self, ctx: Resolution, action: SubmittedAction) -> None:
-        ctx.kill(ctx.target_of(action), "feral_wolf", killers=[self.owner], killer_role=self.name,
+        ctx.attack(ctx.target_of(action), "feral_wolf", killers=[self.owner], killer_role=self.name,
                  attacker_faction=WEREWOLVES, action=action)
 
 

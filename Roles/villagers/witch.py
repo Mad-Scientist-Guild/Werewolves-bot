@@ -29,13 +29,13 @@ class Witch(Role):
             raise GameError("The elixir only works on someone who died last night.")
 
     def resolve_poison(self, ctx: Resolution, action: SubmittedAction) -> None:
-        kill = ctx.kill(ctx.target_of(action), "witch", killers=[self.owner], killer_role=self.name,
+        attack = ctx.attack(ctx.target_of(action), "witch", killers=[self.owner], killer_role=self.name,
                         attacker_faction=VILLAGERS, action=action)
 
         def keep_potion_if_not_home() -> None:
-            if kill.prevented_by and kill.prevented_by.startswith("not home"):
+            if attack.prevented_by and attack.prevented_by.startswith("not home"):
                 self.refund("poison")
-                ctx.inform(self.owner, f"{ctx.state.name(kill.target)} wasn't home - your potion of death is unused.")
+                ctx.inform(self.owner, f"{ctx.state.name(attack.target)} wasn't home - your potion of death is unused.")
 
         ctx.commit(keep_potion_if_not_home, order=Resolution.LATE)
 

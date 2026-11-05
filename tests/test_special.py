@@ -4,10 +4,10 @@ import pytest
 
 from Core import actions, flow, realtime, voting
 from Core.access import Access, player_access
-from Core.effects import Announcement, PrivateMessage, SeancePrompt, TelepathyPrompt
+from Core.effects import Announcement, PrivateMessage, QuestionPrompt, TelepathPrompt
 from Core.errors import GameError
 from Core.factions import winners
-from Core.state import PublicStatus
+from Core.state import PublicRole
 from tests.builder import GameBuilder
 
 
@@ -41,7 +41,7 @@ def test_cupid_links_two_lovers_on_the_first_night_only():
     g = lovers_game(); g.night()
     a, b = g.p("a"), g.p("b")
     assert a.modifier("lover").partner == b.user_id and a.true_faction() == "lovers"
-    lovers_chat = g.state.groups[f"lovers:{g.id('cupid')}"]
+    lovers_chat = g.state.chats[f"lovers:{g.id('cupid')}"]
     assert player_access(g.state, lovers_chat, a) is Access.WRITE
     assert player_access(g.state, lovers_chat, g.p("cupid")) is Access.NONE    # Cupid isn't in the chat
     g.newspaper(); g.dusk()
@@ -140,12 +140,12 @@ def test_all_first_deaths_become_vengeful_spirits():
     for name in ("a", "b"):
         p = g.p(name)
         assert p.has_modifier("vengeful_spirit")
-        assert player_access(g.state, g.state.groups["dead"], p) is Access.NONE
-        line = g.state.groups[f"spirit:{p.user_id}"]
+        assert player_access(g.state, g.state.chats["dead"], p) is Access.NONE
+        line = g.state.chats[f"spirit:{p.user_id}"]
         assert player_access(g.state, line, p) is Access.WRITE
         assert player_access(g.state, line, g.p("spirit")) is Access.WRITE
     g.newspaper()
-    assert g.p("a").public_status is PublicStatus.VENGEFUL_SPIRIT
+    assert g.p("a").public_role is PublicRole.VENGEFUL_SPIRIT
     # later deaths are ordinary
     g.dusk(); pack(g, "c", "w1", "w2", "feral"); g.night()
     assert not g.p("c").has_modifier("vengeful_spirit")
@@ -159,7 +159,7 @@ def test_pack_victim_spirit_can_avenge_on_any_wolf():
     assert not g.alive("w2")
     spirit = g.p("a").modifier("vengeful_spirit")
     assert not spirit.active
-    assert player_access(g.state, g.state.groups["dead"], g.p("a")) is Access.WRITE   # moved on
+    assert player_access(g.state, g.state.chats["dead"], g.p("a")) is Access.WRITE   # moved on
 
 
 def test_feral_victim_spirit_must_name_the_feral_wolf():
@@ -191,7 +191,7 @@ def test_brothers_add_someone_unanimously():
     g = build(b1="brother", b2="brother", b3="brother", x="villager", w="normal_wolf")
     g.start()
     g.act("b1", "invite", target="x"); g.act("b2", "invite", target="x")
-    brothers = g.state.groups["brothers"]
+    brothers = g.state.chats["brothers"]
     assert g.id("x") not in brothers.active_members()
     g.act("b3", "invite", target="x")
     assert g.id("x") in brothers.active_members()
@@ -232,7 +232,7 @@ def test_ruthless_counselor_second_lynch():
         g.act("rc", "second_lynch")
 
 
-# --- Peeking Girl (relays) ---------------------------------------------------------------
+# --- Peeking Girl (eavesdrops) ---------------------------------------------------------------
 
 def test_peeking_girl_gets_a_numbered_transcript():
     g = build(peek="peeking_girl", w1="normal_wolf", w2="normal_wolf", hound="bloodhound", v="villager")
@@ -240,27 +240,27 @@ def test_peeking_girl_gets_a_numbered_transcript():
     g.act("peek", "peek", start="21:00")
     with pytest.raises(GameError, match="once per day"):
         g.act("peek", "peek", start="22:30")
-    relay = g.state.relays[0]
+    eavesdrop = g.state.eavesdrops[0]
     t0 = g.now.replace(hour=21, minute=59)                # first message 1 minute before the window ends
     realtime.capture(g.state, "wolves", g.id("w2"), t0, "let's eat v")
     realtime.capture(g.state, "wolves", g.id("w1"), t0 + timedelta(minutes=10), "ok")
     realtime.capture(g.state, "wolves", g.id("w2"), t0 + timedelta(minutes=16), "too late")
-    assert not realtime.due_relays(g.state, t0 + timedelta(minutes=14))   # capture runs past the window
-    due = realtime.due_relays(g.state, t0 + timedelta(minutes=16))
-    assert due == [relay]
-    realtime.finish_relay(g.state, relay)
+    assert not realtime.due_eavesdrops(g.state, t0 + timedelta(minutes=14))   # capture runs past the window
+    due = realtime.due_eavesdrops(g.state, t0 + timedelta(minutes=16))
+    assert due == [eavesdrop]
+    realtime.finish_eavesdrop(g.state, eavesdrop)
     text = [e.text for e in g.state.pending_effects if isinstance(e, PrivateMessage)][-1]
     assert "`21:59` **Speaker 1:** let's eat v" in text and "**Speaker 2:** ok" in text and "too late" not in text
     # the same wolf keeps the same number another day
-    assert realtime.speaker_number(g.state, relay, g.id("w2")) == 1
+    assert realtime.speaker_number(g.state, eavesdrop, g.id("w2")) == 1
 
 
 def test_silent_window_is_reported():
     g = build(peek="peeking_girl", w="normal_wolf", v="villager")
     g.start(); g.dusk(); g.act("peek", "peek", start="21:00")
-    relay = g.state.relays[0]
-    assert realtime.due_relays(g.state, g.now.replace(hour=22, minute=1)) == [relay]
-    realtime.finish_relay(g.state, relay)
+    eavesdrop = g.state.eavesdrops[0]
+    assert realtime.due_eavesdrops(g.state, g.now.replace(hour=22, minute=1)) == [eavesdrop]
+    realtime.finish_eavesdrop(g.state, eavesdrop)
     assert "nothing was said" in [e.text for e in g.state.pending_effects if isinstance(e, PrivateMessage)][-1]
 
 
@@ -273,29 +273,29 @@ def test_spying_counts_as_leaving_the_house():
 
 # --- Spiritualist -----------------------------------------------------------------------
 
-def test_seance_counts_answers_from_the_dead():
+def test_dead_question_counts_answers_from_the_dead():
     g = spirit_game()
     g.state.data["first_death_seen"] = True
     pack(g, "a", "w1", "w2", "feral"); g.act("feral", "eat", target="b"); g.night()
     g.act("spirit", "ask", question="Was it a wolf?")
-    seance = g.state.seances[0]
-    assert sorted(seance.voters) == sorted([g.id("a"), g.id("b")])
-    assert any(isinstance(e, SeancePrompt) for e in g.state.pending_effects)
+    question = g.state.questions[0]
+    assert sorted(question.voters) == sorted([g.id("a"), g.id("b")])
+    assert any(isinstance(e, QuestionPrompt) for e in g.state.pending_effects)
     with pytest.raises(GameError):
-        realtime.answer_seance(g.state, seance.id, g.id("c"), True)        # the living can't answer
-    realtime.answer_seance(g.state, seance.id, g.id("a"), True)
-    realtime.answer_seance(g.state, seance.id, g.id("b"), False)
-    assert seance.done
+        realtime.answer_question(g.state, question.id, g.id("c"), True)        # the living can't answer
+    realtime.answer_question(g.state, question.id, g.id("a"), True)
+    realtime.answer_question(g.state, question.id, g.id("b"), False)
+    assert question.done
     assert "**1× yes**, **1× no**" in [e.text for e in g.state.pending_effects if isinstance(e, PrivateMessage)][-1]
     with pytest.raises(GameError, match="today"):
         g.act("spirit", "ask", question="Again?")
 
 
-def test_vengeful_spirit_does_not_answer_seances():
+def test_vengeful_spirit_does_not_answer_dead_questions():
     g = spirit_game()
     pack(g, "a", "w1", "w2", "feral"); g.night()               # a is a vengeful spirit
     g.act("spirit", "ask", question="Anyone there?")
-    assert g.state.seances[0].done and g.state.seances[0].voters == []
+    assert g.state.questions[0].done and g.state.questions[0].voters == []
 
 
 # --- Telepath -----------------------------------------------------------------------------
@@ -305,13 +305,13 @@ def test_telepath_message_and_one_reply():
     with pytest.raises(GameError, match="20"):
         g.act("tele", "send", target="v", message=" ".join(["word"] * 21))
     g.act("tele", "send", target="v", message="Who do you trust?")
-    msg = g.state.telepathy[0]
-    assert any(isinstance(e, TelepathyPrompt) for e in g.state.pending_effects)
+    msg = g.state.telepath_messages[0]
+    assert any(isinstance(e, TelepathPrompt) for e in g.state.pending_effects)
     with pytest.raises(GameError):
-        realtime.reply_telepathy(g.state, msg.id, g.id("v2"), "not mine", g.now)
-    realtime.reply_telepathy(g.state, msg.id, g.id("v"), "nobody", g.now)
+        realtime.reply_telepath_message(g.state, msg.id, g.id("v2"), "not mine", g.now)
+    realtime.reply_telepath_message(g.state, msg.id, g.id("v"), "nobody", g.now)
     with pytest.raises(GameError):
-        realtime.reply_telepathy(g.state, msg.id, g.id("v"), "again", g.now)
+        realtime.reply_telepath_message(g.state, msg.id, g.id("v"), "again", g.now)
     assert "answered: “nobody”" in g.messages_for("tele")[-1]
 
 

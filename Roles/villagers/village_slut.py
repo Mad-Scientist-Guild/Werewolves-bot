@@ -29,7 +29,7 @@ class VillageSlut(Role):
     def interact_visit(self, ctx: Resolution, action: SubmittedAction) -> None:
         # runs after locks and stalks, so only when the Slut really got out
         ctx.flags[f"slut_host:{self.owner}"] = ctx.target_of(action)
-        ctx.protect(self.owner, "not home (spending the night elsewhere)", lambda kill: kill.enters_house)
+        ctx.protect(self.owner, "not home (spending the night elsewhere)", lambda attack: attack.enters_house)
 
     def resolve_visit(self, ctx: Resolution, action: SubmittedAction) -> None:
         host = ctx.state.player(self._host(ctx))
@@ -39,15 +39,15 @@ class VillageSlut(Role):
             ctx.inform(self.owner, f"{host.display_name} couldn't sleep - they are the **Insomniac**.")
             ctx.inform(host.user_id, f"You had company tonight: **{ctx.state.name(self.owner)}** is the **Village Slut**.")
 
-    def on_other_killed(self, ctx: Resolution, kill: Kill) -> None:
+    def on_other_killed(self, ctx: Resolution, attack: Attack) -> None:
         # Any attack on the host (anything that enters the house) kills the Slut too.
         # Heartbreak, guilt etc. aren't attacks: they don't enter the house.
-        if kill.target != self._host(ctx) or not kill.enters_house:
+        if attack.target != self._host(ctx) or not attack.enters_house:
             return
-        ctx.note("Kills", f"The Village Slut {ctx.state.name(self.owner)} was with {ctx.state.name(kill.target)}")
-        ctx.flags[f"slut_cheating_death:{self.owner}"] = kill.target   # a betrayed lover becomes a Vengeful Spirit
-        ctx.kill(self.owner, kill.cause, killers=kill.killers, killer_role=kill.killer_role,
-                 attacker_faction=kill.attacker_faction, enters_house=False)
+        ctx.note("Kills", f"The Village Slut {ctx.state.name(self.owner)} was with {ctx.state.name(attack.target)}")
+        ctx.flags[f"slut_cheating_death:{self.owner}"] = attack.target   # a betrayed lover becomes a Vengeful Spirit
+        ctx.attack(self.owner, attack.cause, killers=attack.killers, killer_role=attack.killer_role,
+                 attacker_faction=attack.attacker_faction, enters_house=False)
 
     def on_other_converted(self, ctx: Resolution, player: Player, kind: str, by: int) -> None:
         # Werewolf and vampire turning are attacks on the host's house, so the Slut is

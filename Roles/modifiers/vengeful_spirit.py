@@ -26,13 +26,13 @@ class VengefulSpirit(Modifier):
     allowed: list[int] = field(default_factory=list)   # the right answers
     any_werewolf: bool = False                          # killed by the pack: any werewolf is right
     nights_seen: int = 0
-    since: str = ""                                     # resolution slot in which they became a spirit
+    since: str = ""                                     # resolution moment in which they became a spirit
     spirit_group: str | None = None
 
     # while active they carry the public Vengeful Spirit role and are kept out of the dead chat
     @property
-    def public_status(self) -> PublicStatus | None:   # type: ignore[override]
-        return PublicStatus.VENGEFUL_SPIRIT if self.active else None
+    def public_role(self) -> PublicRole | None:   # type: ignore[override]
+        return PublicRole.VENGEFUL_SPIRIT if self.active else None
 
     @property
     def blocks_dead_chat(self) -> bool:   # type: ignore[override]
@@ -45,7 +45,7 @@ class VengefulSpirit(Modifier):
         target = ctx.state.player(ctx.target_of(action))
         right = target.user_id in self.allowed or (self.any_werewolf and target.can_vote_wolf_kill())
         if right:
-            ctx.kill(target.user_id, "vengeful_spirit", killers=[self.owner], killer_role=self.name,
+            ctx.attack(target.user_id, "vengeful_spirit", killers=[self.owner], killer_role=self.name,
                      enters_house=False, action=action)
             ctx.inform(self.owner, f"You were right: **{target.display_name}** feels your vengeance.")
         else:
@@ -53,7 +53,7 @@ class VengefulSpirit(Modifier):
         ctx.commit(lambda: self.move_on(ctx, "made their guess"))
 
     def after_resolution(self, ctx: Resolution) -> None:
-        if ctx.kind != "night" or not self.active or self.since == ctx.slot:
+        if ctx.kind != "night" or not self.active or self.since == ctx.moment:
             return
         self.nights_seen += 1
         if self.nights_seen >= self.setting(ctx.state, "nights", NIGHTS):
@@ -64,8 +64,8 @@ class VengefulSpirit(Modifier):
         if not self.active:
             return
         self.active = False
-        if self.spirit_group and self.spirit_group in ctx.state.groups:
-            ctx.state.groups[self.spirit_group].leave(self.owner)
+        if self.spirit_group and self.spirit_group in ctx.state.chats:
+            ctx.state.chats[self.spirit_group].leave(self.owner)
         ctx.inform(self.owner, "You move on to the afterlife and join the other dead.")
         ctx.note("Deaths", f"Vengeful Spirit {ctx.state.name(self.owner)} moves on ({reason})")
 
@@ -77,12 +77,12 @@ def make_vengeful_spirit(ctx: Resolution, player: Player, *, allowed: list[int],
         return
     state = ctx.state
     spirit = add_modifier(state, player, "vengeful_spirit", reason=reason, allowed=allowed,
-                          any_werewolf=any_werewolf, since=ctx.slot)
-    group = state.ensure_group(f"spirit:{player.user_id}", GroupKind.SPIRIT_LINE, "vengeful-spirit")
-    group.add(player.user_id)
+                          any_werewolf=any_werewolf, since=ctx.moment)
+    chat = state.ensure_chat(f"spirit:{player.user_id}", ChatKind.SPIRIT_CHAT, "vengeful-spirit")
+    chat.add(player.user_id)
     for spiritualist in state.players_with_role("spiritualist", alive_only=True):
-        group.add(spiritualist.user_id)
-    spirit.spirit_group = group.key
+        chat.add(spiritualist.user_id)
+    spirit.spirit_group = chat.key
     ctx.inform(player.user_id, "👻 You are a **Vengeful Spirit**! You can talk with the Spiritualist in your spirit "
                                "chat, and within three nights you may name your killer with "
                                "`/vengeful_spirit avenge` - if you're right, they die.")

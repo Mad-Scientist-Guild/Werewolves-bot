@@ -29,8 +29,8 @@ class PrivateMessage(Effect):
 
 
 @dataclass
-class GroupMessage(Effect):
-    group: str
+class ChatMessage(Effect):
+    chat: str
     text: str
     title: str = ""
 
@@ -43,7 +43,7 @@ class Announcement(Effect):
 
 
 @dataclass
-class VoteChannelPost(Effect):
+class VoteResults(Effect):
     """Published vote results (posted in the announcements channel)."""
     text: str
     title: str = ""
@@ -60,8 +60,8 @@ class RoleCard(Effect):
 
 @dataclass
 class CreateChannel(Effect):
-    """A group created mid-game needs its Discord channel."""
-    group_key: str
+    """A chat created mid-game needs its Discord channel."""
+    chat_key: str
 
 
 @dataclass
@@ -82,12 +82,12 @@ class DirectMessage(Effect):
 
 
 @dataclass
-class SeancePrompt(Effect):
+class QuestionPrompt(Effect):
     """The Spiritualist's question, with yes/no buttons, in the dead chat."""
-    seance_id: int
+    question_id: int
 
 
 @dataclass
-class TelepathyPrompt(Effect):
+class TelepathPrompt(Effect):
     """A telepathic message (with a reply button) in the target's private channel."""
-    telepathy_id: int
+    telepath_message_id: int

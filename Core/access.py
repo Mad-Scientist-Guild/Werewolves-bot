@@ -3,7 +3,7 @@
 The channel reconciler turns these into Discord permission overwrites, so
 every rule about channel access lives here.
 
-Data is never made inaccessible: leaving a group or a group being archived
+Data is never made inaccessible: leaving a chat or a chat being archived
 downgrades to READ. The only full revocations are the death rules of the
 rules document, written out explicitly below:
   * the dead chat is for the dead only - a raised Skeleton or a revived
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from Core.state import GameState, Group, GroupKind, LifeState, Membership, Player, PublicStatus
+from Core.state import GameState, Chat, ChatKind, LifeState, Membership, Player, PublicRole
 
 
 class Access(str, Enum):
@@ -25,14 +25,14 @@ class Access(str, Enum):
 
 
 # channels that keep working during the Ruthless Counselor's lockdown
-LOCKDOWN_EXEMPT = frozenset({GroupKind.PRIVATE, GroupKind.DEAD})
+LOCKDOWN_EXEMPT = frozenset({ChatKind.PRIVATE, ChatKind.DEAD})
 
 
-def player_access(state: GameState, group: Group, player: Player) -> Access:
-    kind = group.kind
+def player_access(state: GameState, chat: Chat, player: Player) -> Access:
+    kind = chat.kind
 
-    if kind is GroupKind.VILLAGE:
-        if group.archived:
+    if kind is ChatKind.VILLAGE:
+        if chat.archived:
             return Access.READ
         if player.life is LifeState.ALIVE:
             return Access.READ if state.lockdown else Access.WRITE
@@ -40,21 +40,21 @@ def player_access(state: GameState, group: Group, player: Player) -> Access:
             return Access.REACT
         return Access.READ
 
-    if kind is GroupKind.DEAD:
+    if kind is ChatKind.DEAD:
         # Death rules (explicit revocations): only the dead belong here.
         if not player.dead:
             return Access.NONE
         if any(m.blocks_dead_chat for m in player.modifiers):
             return Access.NONE
-        return Access.READ if group.archived else Access.WRITE
+        return Access.READ if chat.archived else Access.WRITE
 
-    membership = group.members.get(player.user_id)
+    membership = chat.members.get(player.user_id)
     if membership is None or membership is Membership.REVOKED:
         return Access.NONE
-    if membership is Membership.FORMER or group.archived:
+    if membership is Membership.FORMER or chat.archived:
         return Access.READ
 
-    if kind is GroupKind.PRIVATE:
+    if kind is ChatKind.PRIVATE:
         return Access.WRITE   # always able to talk to the GMs, dead or alive
 
     if player.life is LifeState.ALIVE:
@@ -62,33 +62,33 @@ def player_access(state: GameState, group: Group, player: Player) -> Access:
             return Access.READ
         return Access.WRITE
     if player.life is LifeState.SKELETON:
-        return Access.WRITE if kind in (GroupKind.SKELETONS, GroupKind.UNDEAD) else Access.READ
+        return Access.WRITE if kind in (ChatKind.SKELETONS, ChatKind.UNDEAD) else Access.READ
     # dead
-    if kind is GroupKind.SPIRIT_LINE:
+    if kind is ChatKind.SPIRIT_CHAT:
         return Access.WRITE
     return Access.READ
 
 
-def due_public_status(player: Player) -> PublicStatus:
+def due_public_role(player: Player) -> PublicRole:
     """The public Discord role this player should have once their state is
     made public (at the newspaper, or immediately for a lynch)."""
     for modifier in reversed(player.modifiers):
-        if modifier.public_status is not None:
-            return modifier.public_status
+        if modifier.public_role is not None:
+            return modifier.public_role
     if player.life is LifeState.SKELETON:
-        return PublicStatus.SKELETON
+        return PublicRole.SKELETON
     if player.dead:
-        return PublicStatus.DEAD
-    return PublicStatus.NONE
+        return PublicRole.DEAD
+    return PublicRole.NONE
 
 
-def publish_statuses(state: GameState) -> list[Player]:
+def publish_public_roles(state: GameState) -> list[Player]:
     """Make every player's public status match their state. Returns the
     players whose status changed."""
     changed = []
     for player in state.players.values():
-        due = due_public_status(player)
-        if player.public_status is not due:
-            player.public_status = due
+        due = due_public_role(player)
+        if player.public_role is not due:
+            player.public_role = due
             changed.append(player)
     return changed

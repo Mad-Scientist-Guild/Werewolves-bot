@@ -15,7 +15,7 @@ class CunningWolf(Role):
     name = "cunning_wolf"
     display = "Cunning wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "When you vote in the lynch you can name a second player: when the votes are published, that name is "

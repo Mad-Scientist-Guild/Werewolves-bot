@@ -2,7 +2,6 @@ import math
 
 import pytest
 
-from Core import flow
 from Core.errors import GameError
 from Core.state import ActionStatus
 from tests.builder import GameBuilder
@@ -278,7 +277,7 @@ def test_witch_potion_on_an_absent_slut_is_not_used():
     g.act("slut", "visit", target="v"); g.act("witch", "poison", target="slut")
     g.night()
     assert g.alive("slut")
-    assert g.p("witch").role.uses.get("poison", 0) == 0
+    assert g.p("witch").role.uses_spent.get("poison", 0) == 0
 
 
 def test_slut_is_turned_along_with_the_host():

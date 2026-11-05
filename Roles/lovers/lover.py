@@ -45,7 +45,7 @@ class Lover(Modifier):
         if turned(me):
             ctx.note("Deaths", f"{me.display_name} doesn't die of heartbreak - they were turned")
             return
-        ctx.kill(self.owner, "heartbreak", killers=[dead.user_id], killer_role="heartbreak", unstoppable=True,
+        ctx.attack(self.owner, "heartbreak", killers=[dead.user_id], killer_role="heartbreak", unstoppable=True,
                  enters_house=False)
 
     def on_death(self, ctx: Resolution, record: DeathRecord) -> None:

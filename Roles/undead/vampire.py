@@ -15,7 +15,7 @@ class VampireSpawn(Modifier):
         "if the Lord dies after you've shared in a kill, you become the new Vampire Lord."
     )
     true_faction = UNDEAD
-    groups = ("undead",)
+    chats = ("undead",)
 
     turned_by: int | None = None
     participated: bool = False
@@ -54,7 +54,7 @@ class VampireLord(Role):
     name = "vampire_lord"
     display = "Vampire Lord"
     faction = UNDEAD
-    groups = ("undead",)
+    chats = ("undead",)
     description = (
         "Every night you can bite a player to kill them. While you have no Vampire Spawn you may instead turn your "
         "victim into one: they join the Undead (and your chat) the next morning, keeping their own abilities. "
@@ -78,12 +78,12 @@ class VampireLord(Role):
         if action.params.get("mode") == "turn":
             self._turn(ctx, action, target)
             return
-        ctx.kill(target, "vampire", killers=[self.owner], killer_role=self.name, attacker_faction=UNDEAD,
+        ctx.attack(target, "vampire", killers=[self.owner], killer_role=self.name, attacker_faction=UNDEAD,
                  action=action)
 
-    def on_other_killed(self, ctx: Resolution, kill: Kill) -> None:
+    def on_other_killed(self, ctx: Resolution, attack: Attack) -> None:
         # every kill of the Lord counts for the spawns - no matter the order deaths are processed in
-        if kill.cause == "vampire" and self.owner in kill.killers:
+        if attack.cause == "vampire" and self.owner in attack.killers:
             for spawn in living_spawns(ctx.state):
                 spawn.modifier("vampire_spawn").participated = True
 

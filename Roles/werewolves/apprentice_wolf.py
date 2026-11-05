@@ -8,7 +8,7 @@ class ApprenticeWolf(Role):
     name = "apprentice_wolf"
     display = "Apprentice wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "The night after a fellow wolf dies, you can take up their role - only that night, or the chance is gone. "
@@ -56,7 +56,7 @@ class ApprenticeWolf(Role):
         def commit() -> None:
             adopt_role(ctx.state, me, role, reason=f"Apprentice took over {mentor.display_name}",
                        note=f"You took over {mentor.display_name}'s role. Its remaining charges carry over.")
-            add_status(ctx.state, mentor, "becomes_on_revive", source=self.owner,
+            add_condition(ctx.state, mentor, "becomes_on_revive", source=self.owner,
                        role="werewolf", reason="their role was taken over by the Apprentice wolf")
 
         ctx.commit(commit)

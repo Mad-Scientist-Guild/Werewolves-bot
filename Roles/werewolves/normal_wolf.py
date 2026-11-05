@@ -8,7 +8,7 @@ class NormalWolf(Role):
     name = "normal_wolf"
     display = "Normal wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "You have no extra powers, but you have inside information: you know one villager role that is not in "

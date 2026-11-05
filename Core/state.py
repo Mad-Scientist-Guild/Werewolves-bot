@@ -14,7 +14,7 @@ from Core.errors import GameError, NotAPlayer
 from Core.serialize import transient
 
 if TYPE_CHECKING:
-    from Core.actor import Actor, Modifier, Role
+    from Core.actor import RoleBase, Modifier, Role
     from Core.effects import Effect
 
 
@@ -36,7 +36,7 @@ class LifeState(str, Enum):
     PERMA_DEAD = "perma_dead"  # a skeleton killed again - cannot be raised or revived
 
 
-class GroupKind(str, Enum):
+class ChatKind(str, Enum):
     PRIVATE = "private"          # a player's private channel with the GMs
     VILLAGE = "village"          # everyone; membership derived from the player list
     DEAD = "dead"                # the dead chat; membership derived from life states
@@ -47,17 +47,17 @@ class GroupKind(str, Enum):
     LOVERS = "lovers"
     BROTHERS = "brothers"
     COVEN = "coven"
-    SPIRIT_LINE = "spirit_line"  # Spiritualist <-> Vengeful Spirit
+    SPIRIT_CHAT = "spirit_chat"  # Spiritualist <-> Vengeful Spirit
     CUSTOM = "custom"
 
 
 class Membership(str, Enum):
     ACTIVE = "active"
-    FORMER = "former"    # left the group: keeps read-only access (nothing is made inaccessible)
+    FORMER = "former"    # left the chat: keeps read-only access (nothing is made inaccessible)
     REVOKED = "revoked"  # explicit revocation - only used by the death rules
 
 
-class PublicStatus(str, Enum):
+class PublicRole(str, Enum):
     """The public Discord roles. Only these three game states have one."""
     NONE = "none"
     DEAD = "dead"
@@ -82,17 +82,17 @@ class DeathRecord:
     phase: str
     cause: str
     killer_ids: list[int] = field(default_factory=list)
-    killer_role: str | None = None   # role name, or a group label like "werewolves"
+    killer_role: str | None = None   # role name, or a chat label like "werewolves"
     public: bool = False             # lynch deaths are public immediately
     revived: bool = False
 
 
 @dataclass
-class Status:
+class Condition:
     """A temporary or permanent marker on a player (blessed, cursed, enchanted...)."""
     key: str
     source: int | None = None
-    expires: str | None = None   # slot id, e.g. "morning:4"; None = until removed
+    expires: str | None = None   # moment id, e.g. "morning:4"; None = until removed
     data: dict[str, Any] = field(default_factory=dict)
 
 
@@ -105,11 +105,11 @@ class Player:
     original_role: str | None = None   # role at game start (coven kill list, reports)
     faction: str | None = None         # base faction; modifiers may override it
     modifiers: list[Modifier] = field(default_factory=list)
-    family: str | None = None          # group key
-    private_group: str | None = None   # group key of their private channel
-    statuses: list[Status] = field(default_factory=list)
+    family: str | None = None          # chat key
+    private_chat: str | None = None   # chat key of their private channel
+    conditions: list[Condition] = field(default_factory=list)
     deaths: list[DeathRecord] = field(default_factory=list)
-    public_status: PublicStatus = PublicStatus.NONE
+    public_role: PublicRole = PublicRole.NONE
     last_active_at: str | None = None
     inactivity_level: int = 0          # 0 = fine, 1 = warned, 2 = flagged
     previous_user_ids: list[int] = field(default_factory=list)  # reaper replacements
@@ -128,8 +128,8 @@ class Player:
         return self.deaths[-1] if self.deaths and not self.deaths[-1].revived else None
 
     # --- actors ----------------------------------------------------------
-    def actors(self) -> list[Actor]:
-        out: list[Actor] = []
+    def actors(self) -> list[RoleBase]:
+        out: list[RoleBase] = []
         if self.role is not None:
             out.append(self.role)
         out.extend(self.modifiers)
@@ -156,28 +156,28 @@ class Player:
     def can_vote_wolf_kill(self) -> bool:
         return any(a.can_vote_wolf_kill for a in self.actors())
 
-    # --- statuses --------------------------------------------------------
-    def status(self, key: str) -> Status | None:
-        return next((s for s in self.statuses if s.key == key), None)
+    # --- conditions ------------------------------------------------------
+    def condition(self, key: str) -> Condition | None:
+        return next((s for s in self.conditions if s.key == key), None)
 
-    def has_status(self, key: str) -> bool:
-        return self.status(key) is not None
+    def has_condition(self, key: str) -> bool:
+        return self.condition(key) is not None
 
-    def add_status(self, status: Status) -> None:
-        self.statuses = [s for s in self.statuses if not (s.key == status.key and s.source == status.source)]
-        self.statuses.append(status)
+    def add_condition(self, status: Condition) -> None:
+        self.conditions = [s for s in self.conditions if not (s.key == status.key and s.source == status.source)]
+        self.conditions.append(status)
 
-    def remove_status(self, key: str) -> None:
-        self.statuses = [s for s in self.statuses if s.key != key]
+    def remove_condition(self, key: str) -> None:
+        self.conditions = [s for s in self.conditions if s.key != key]
 
     def __repr__(self) -> str:
         return f"<Player {self.display_name} ({self.user_id}) {self.role_name} {self.life.value}>"
 
 
 @dataclass
-class Group:
+class Chat:
     key: str
-    kind: GroupKind
+    kind: ChatKind
     name: str                      # channel name, fixed at creation (channels are never renamed)
     channel_id: int | None = None
     members: dict[int, Membership] = field(default_factory=dict)
@@ -202,7 +202,7 @@ class SubmittedAction:
     actor: int
     source: str          # name of the role/modifier that provides the ability
     ability: str
-    slot: str            # "night:3", "dusk:3" or "instant"
+    resolves_at: str     # "night:3", "dusk:3" or "instant"
     targets: list[int] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
     submitted_at: str = ""
@@ -253,50 +253,50 @@ class Decision:
 
 
 @dataclass
-class RelayMessage:
+class OverheardMessage:
     speaker: int
     at: str                      # ISO datetime
     text: str
 
 
 @dataclass
-class Relay:
-    """Listening in on a group chat (Peeking Girl, Diviner's Scrying): the
+class Eavesdrop:
+    """Listening in on a chat chat (Peeking Girl, Diviner's Scrying): the
     first `capture_minutes` of conversation after the first message inside
     the window are sent to the listener as a transcript."""
     id: int
     listener: int
-    source_group: str
+    source_chat: str
     window_start: str
     window_end: str
     purpose: str                 # "peeking_girl", "diviner"...
     night: int                   # the night this counts as leaving the house for
     capture_minutes: int = 15
     capture_until: str | None = None
-    messages: list[RelayMessage] = field(default_factory=list)
+    messages: list[OverheardMessage] = field(default_factory=list)
     done: bool = False
 
 
 @dataclass
-class Seance:
+class YesNoQuestion:
     """A yes/no question with anonymous answers: the Spiritualist asking the
-    dead (kind "seance"), or the Enchantress' Charm of the Open Book (kind
+    dead (kind "dead"), or the Enchantress' Charm of the Open Book (kind
     "open_book", one voter)."""
     id: int
     asker: int
-    question: str
+    text: str
     asked_at: str
     deadline: str
     voters: list[int] = field(default_factory=list)          # who may answer
     answers: dict[int, bool] = field(default_factory=dict)
     message_id: int | None = None
     done: bool = False
-    kind: str = "seance"
-    where: str = "dead"                                       # group whose channel gets the question
+    kind: str = "dead"
+    where: str = "dead"                                       # chat whose channel gets the question
 
 
 @dataclass
-class TelepathyMessage:
+class TelepathMessage:
     id: int
     sender: int
     target: int
@@ -367,10 +367,10 @@ class GameState:
 
     players: dict[int, Player] = field(default_factory=dict)
     backups: list[int] = field(default_factory=list)
-    groups: dict[str, Group] = field(default_factory=dict)
-    channels: dict[str, int] = field(default_factory=dict)       # announcements, votes, mod_log
+    chats: dict[str, Chat] = field(default_factory=dict)
+    channels: dict[str, int] = field(default_factory=dict)       # announcements, mod_log
     categories: dict[str, list[int]] = field(default_factory=dict)   # category key -> ids (overflow adds more)
-    discord_roles: dict[str, int] = field(default_factory=dict)  # PublicStatus value -> role id
+    discord_roles: dict[str, int] = field(default_factory=dict)  # PublicRole value -> role id
 
     settings: Settings = field(default_factory=Settings)
     role_pool: dict[str, int] = field(default_factory=dict)
@@ -381,10 +381,10 @@ class GameState:
     decisions: list[Decision] = field(default_factory=list)
     night_overrides: list[NightOverride] = field(default_factory=list)
     next_transition: Transition | None = None
-    relays: list[Relay] = field(default_factory=list)
-    seances: list[Seance] = field(default_factory=list)
-    telepathy: list[TelepathyMessage] = field(default_factory=list)
-    # "listener:group" -> {user id: speaker number}, so transcripts number people consistently
+    eavesdrops: list[Eavesdrop] = field(default_factory=list)
+    questions: list[YesNoQuestion] = field(default_factory=list)
+    telepath_messages: list[TelepathMessage] = field(default_factory=list)
+    # "listener:chat" -> {user id: speaker number}, so transcripts number people consistently
     aliases: dict[str, dict[int, int]] = field(default_factory=dict)
 
     mayor: int | None = None
@@ -430,7 +430,7 @@ class GameState:
         player = self.players.get(user_id)
         return player.display_name if player else f"<unknown {user_id}>"
 
-    def iter_actors(self) -> Iterator[tuple[Player, Actor]]:
+    def iter_actors(self) -> Iterator[tuple[Player, RoleBase]]:
         for player in sorted(self.players.values(), key=lambda p: p.user_id):
             for actor in player.actors():
                 yield player, actor
@@ -448,35 +448,35 @@ class GameState:
         if house.startswith("house:"):
             player = self.players.get(int(house.split(":", 1)[1]))
             return [player] if player is not None else []
-        group = self.groups.get(house)
-        if group is None:
+        chat = self.chats.get(house)
+        if chat is None:
             return []
-        return [self.players[u] for u in group.active_members() if u in self.players]
+        return [self.players[u] for u in chat.active_members() if u in self.players]
 
     def housemates(self, user_id: int) -> list[Player]:
         """Everyone living in this player's house, the player included."""
         return self.house_members(self.house_of(user_id))
 
-    # --- groups ----------------------------------------------------------
-    def group(self, key: str) -> Group:
-        group = self.groups.get(key)
-        if group is None:
-            raise GameError(f"Unknown group '{key}'.")
-        return group
+    # --- chats -----------------------------------------------------------
+    def chat(self, key: str) -> Chat:
+        chat = self.chats.get(key)
+        if chat is None:
+            raise GameError(f"Unknown chat '{key}'.")
+        return chat
 
-    def groups_of_kind(self, kind: GroupKind) -> list[Group]:
-        return [g for g in self.groups.values() if g.kind is kind]
+    def chats_of_kind(self, kind: ChatKind) -> list[Chat]:
+        return [g for g in self.chats.values() if g.kind is kind]
 
-    def ensure_group(self, key: str, kind: GroupKind, name: str, *, topic: str = "") -> Group:
-        """Return the group, creating it (and queueing its channel) if new."""
-        group = self.groups.get(key)
-        if group is None:
+    def ensure_chat(self, key: str, kind: ChatKind, name: str, *, topic: str = "") -> Chat:
+        """Return the chat, creating it (and queueing its channel) if new."""
+        chat = self.chats.get(key)
+        if chat is None:
             from Core.effects import CreateChannel
-            group = Group(key=key, kind=kind, name=name, created_day=self.day, topic=topic)
-            self.groups[key] = group
+            chat = Chat(key=key, kind=kind, name=name, created_day=self.day, topic=topic)
+            self.chats[key] = chat
             if self.phase is not Phase.SETUP:
-                self.emit(CreateChannel(group_key=key))
-        return group
+                self.emit(CreateChannel(chat_key=key))
+        return chat
 
     # --- misc ------------------------------------------------------------
     def next_id(self, counter: str) -> int:
@@ -498,6 +498,6 @@ class GameState:
     def active(self) -> bool:
         return self.phase in ACTIVE_PHASES
 
-    def slot(self, kind: str, day: int | None = None) -> str:
+    def moment(self, kind: str, day: int | None = None) -> str:
         return f"{kind}:{self.day if day is None else day}"
 

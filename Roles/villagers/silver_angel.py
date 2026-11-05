@@ -49,7 +49,7 @@ class SilverAngel(Role):
         target = ctx.target_of(action)
         ctx.protect(
             target, "protected by the Silver Angel",
-            lambda kill: kill.attacker_faction in EVIL_FACTIONS,   # also matches turning (cause "turn")
+            lambda attack: attack.attacker_faction in EVIL_FACTIONS,   # also matches turning (cause "turn")
         )
         ctx.flags[f"silver_angel_protected:{self.owner}"] = target
 

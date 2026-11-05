@@ -8,7 +8,7 @@ class Werewolf(Role):
     name = "werewolf"
     display = "Werewolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     assignable = False
     description = "You are a werewolf without special abilities. Help the pack choose who to eat."

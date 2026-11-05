@@ -184,10 +184,7 @@ def _load_dataclass(tp: type, data: dict[str, Any]) -> Any:
     if issubclass(tp, Polymorphic) and isinstance(data, dict) and TYPE_KEY in data:
         found = poly_lookup(tp.__poly_family__, data[TYPE_KEY])
         if found is None:
-            fallback = getattr(tp, "__missing_type__", None)
-            if fallback is None:
-                raise TypeError(f"Unknown {tp.__poly_family__} type '{data[TYPE_KEY]}'")
-            return fallback(data)
+            raise TypeError(f"Unknown {tp.__poly_family__} type '{data[TYPE_KEY]}'")
         cls = found
 
     hints = _type_hints(cls)

@@ -1,11 +1,11 @@
 import pytest
 
-from Core import actions, flow, voting
+from Core import flow
 from Core.access import Access, player_access
 from Core.errors import GameError
 from Core.factions import winners
 from Core.state import LifeState
-from Roles.coven._coven import group_of
+from Roles.coven._coven import circle_of
 from tests.builder import GameBuilder
 
 
@@ -39,9 +39,9 @@ def test_lich_raises_correct_guesses():
     seer, angel = g.p("seery"), g.p("angie")
     assert seer.life is LifeState.SKELETON and seer.true_faction() == "undead"
     assert angel.life is LifeState.DEAD
-    assert player_access(g.state, g.state.groups["village"], seer) is Access.REACT
-    assert player_access(g.state, g.state.groups["dead"], seer) is Access.NONE
-    assert player_access(g.state, g.state.groups[f"skeletons:{g.id('lich')}"], seer) is Access.WRITE
+    assert player_access(g.state, g.state.chats["village"], seer) is Access.REACT
+    assert player_access(g.state, g.state.chats["dead"], seer) is Access.NONE
+    assert player_access(g.state, g.state.chats[f"skeletons:{g.id('lich')}"], seer) is Access.WRITE
     g.newspaper()
     with pytest.raises(GameError):
         g.vote("seery", "v1")                                              # skeletons can't vote
@@ -94,7 +94,7 @@ def test_vampire_turns_a_spawn_and_only_one_at_a_time():
     g = vampire_game(); g.act("vl", "bite", target="a", mode="turn"); g.night()
     a = g.p("a")
     assert a.alive and a.true_faction() == "undead"
-    assert player_access(g.state, g.state.groups["undead"], a) is Access.WRITE
+    assert player_access(g.state, g.state.chats["undead"], a) is Access.WRITE
     g.newspaper(); g.dusk()
     with pytest.raises(GameError, match="already have"):
         g.act("vl", "bite", target="b", mode="turn")
@@ -168,16 +168,16 @@ def test_finding_members_builds_and_merges_chats():
     g.act("curse", "find", target="div")
     g.act("ench", "find", target="seery")                     # wrong
     g.night()
-    assert group_of(g.state, g.id("curse")) == {g.id("curse"), g.id("div")}
+    assert circle_of(g.state, g.id("curse")) == {g.id("curse"), g.id("div")}
     first_chat = g.state.data["coven_chat_of"][str(g.id("curse"))]
     assert any("kill list" in m for m in g.messages_for("div"))
     assert "not part of the Coven" in g.messages_for("ench")[-1]
     g.newspaper(); g.dusk()
-    g.act("ench", "find", target="div")                     # finding ONE member joins the whole group
+    g.act("ench", "find", target="div")                     # finding ONE member joins the whole circle
     g.night()
-    assert group_of(g.state, g.id("ench")) == {g.id("curse"), g.id("div"), g.id("ench")}
+    assert circle_of(g.state, g.id("ench")) == {g.id("curse"), g.id("div"), g.id("ench")}
     assert g.state.data["coven_chat_of"][str(g.id("ench"))] == first_chat
-    assert player_access(g.state, g.state.groups[first_chat], g.p("ench")) is Access.WRITE
+    assert player_access(g.state, g.state.chats[first_chat], g.p("ench")) is Access.WRITE
 
 
 def test_merging_two_groups_archives_their_chats():
@@ -190,9 +190,9 @@ def test_merging_two_groups_archives_their_chats():
     g.night()
     new = g.state.data["coven_chat_of"][str(g.id("curse"))]
     assert new not in (old_a, old_b)
-    assert g.state.groups[old_a].archived and g.state.groups[old_b].archived
-    assert player_access(g.state, g.state.groups[old_a], g.p("curse")) is Access.READ       # still readable
-    assert player_access(g.state, g.state.groups[new], g.p("hag")) is Access.WRITE
+    assert g.state.chats[old_a].archived and g.state.chats[old_b].archived
+    assert player_access(g.state, g.state.chats[old_a], g.p("curse")) is Access.READ       # still readable
+    assert player_access(g.state, g.state.chats[new], g.p("hag")) is Access.WRITE
 
 
 def test_hag_mother_check_needs_the_whole_coven():
@@ -243,11 +243,11 @@ def test_diviner_detection_and_vision():
     assert "**Villager**" in g.messages_for("div")[-1] or "**Enchantress**" in g.messages_for("div")[-1]
 
 
-def test_diviner_scrying_schedules_a_relay_on_the_family():
+def test_diviner_scrying_schedules_an_eavesdrop_on_the_family():
     g = coven_game()
     g.act("div", "scry", target="a", start="21:30")
-    relay = g.state.relays[0]
-    assert relay.source_group == g.p("a").family and relay.purpose == "diviner"
+    eavesdrop = g.state.eavesdrops[0]
+    assert eavesdrop.source_chat == g.p("a").family and eavesdrop.purpose == "diviner"
     with pytest.raises(GameError, match="already"):
         g.act("div", "divine", target="a", method="vision")
 
@@ -272,10 +272,10 @@ def test_charm_of_protection():
 def test_charm_of_the_open_book_asks_the_target():
     g = day_two_coven()
     g.act("ench", "enchant", target="a", charm="open_book", question="Do you trust b?")
-    seance = g.state.seances[0]
-    assert seance.kind == "open_book" and seance.voters == [g.id("a")] and seance.where == g.p("a").private_group
+    question = g.state.questions[0]
+    assert question.kind == "open_book" and question.voters == [g.id("a")] and question.where == g.p("a").private_chat
     from Core import realtime
-    realtime.answer_seance(g.state, seance.id, g.id("a"), True)
+    realtime.answer_question(g.state, question.id, g.id("a"), True)
     assert "answered “Do you trust b?” with **yes**" in g.messages_for("ench")[-1]
 
 
@@ -310,7 +310,7 @@ def test_changeling_grows_up_after_three_nights_and_joins_the_hag():
         g.newspaper(); g.dusk(); g.night()
     a = g.p("a")
     assert a.modifier("changeling").grown and a.true_faction() == "coven"
-    assert g.id("a") in group_of(g.state, g.id("hag"))
+    assert g.id("a") in circle_of(g.state, g.id("hag"))
     assert a.role_name == "villager"                              # keeps their own role
 
 

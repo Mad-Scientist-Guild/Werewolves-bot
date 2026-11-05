@@ -4,7 +4,7 @@ from Core import flow, voting
 from Core.actor import ROLE_REGISTRY
 from Core.effects import RoleCard
 from Core.errors import GameError
-from Core.state import LifeState, Phase, PublicStatus
+from Core.state import LifeState, Phase, PublicRole
 from Services.effects import role_card
 from tests.builder import GameBuilder
 
@@ -38,9 +38,9 @@ def test_mayor_successor_takes_over_quietly():
 def test_gm_kill_is_quiet_unless_public():
     g = game()
     flow.gm_kill(g.state, g.id("v1"), cause="inactive")
-    assert g.p("v1").dead and g.p("v1").public_status is PublicStatus.NONE
+    assert g.p("v1").dead and g.p("v1").public_role is PublicRole.NONE
     flow.gm_kill(g.state, g.id("v2"), public=True)
-    assert g.p("v2").public_status is PublicStatus.DEAD
+    assert g.p("v2").public_role is PublicRole.DEAD
     with pytest.raises(GameError):
         flow.gm_kill(g.state, g.id("v2"))
     flow.gm_revive(g.state, g.id("v1"))
@@ -55,7 +55,7 @@ def test_reaper_replacement_moves_everything():
     flow.replace_player(g.state, old, 999, "newbie")
     p = g.state.player(999)
     assert p.role_name == "silver_angel" and p.role.owner == 999 and old in p.previous_user_ids
-    assert g.state.groups[p.private_group].members.get(999) is not None
+    assert g.state.chats[p.private_chat].members.get(999) is not None
     assert any(a.actor == 999 for a in g.state.actions)
     g.night()   # the transferred action still resolves
 
@@ -83,7 +83,6 @@ def test_skeleton_cannot_be_revived_and_dies_permanently():
 
 def test_game_end():
     g = game()
-    from datetime import datetime
     flow.end_game(g.state, "villagers", g.now)
     assert g.state.phase is Phase.ENDED and g.state.next_transition is None
 

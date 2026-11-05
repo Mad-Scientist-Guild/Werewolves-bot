@@ -8,7 +8,7 @@ pack wolf counts as attacking (leaves the house, can be trapped...).
 """
 from Core import voting
 from Core.clock import now_in
-from Core.effects import GroupMessage
+from Core.effects import ChatMessage
 from Core.resolution import register_prepare_hook
 from Core.state import Phase
 from Roles.role import *
@@ -38,7 +38,7 @@ def wolf_pack_attack(ctx: Resolution) -> None:
     for wolf in attackers:
         ctx.visits.append(Visit(visitor=wolf, target=tally.target, action_id=None, source=PACK_SOURCE,
                                 ability="attack", pack=True))
-    ctx.flags["pack_kill"] = ctx.kill(
+    ctx.flags["pack_attack"] = ctx.attack(
         tally.target, "werewolves", killers=attackers, killer_role="werewolves", attacker_faction=WEREWOLVES,
     )
 
@@ -82,5 +82,5 @@ class WolvesCommands(RoleCommands, group_name="wolves", source=PACK_SOURCE):
             summary = pack_summary(state)
             state.log("WOLVES", f"{voter} {choice}. {summary}", actor=interaction.user.id,
                       targets=[target] if target else [])
-            state.emit(GroupMessage(group="wolves", text=f"**{voter}** {choice}.\n{summary}"))
+            state.emit(ChatMessage(chat="wolves", text=f"**{voter}** {choice}.\n{summary}"))
         await reply(interaction, f"Your vote is in. {summary}")

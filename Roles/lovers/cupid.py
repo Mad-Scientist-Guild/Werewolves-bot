@@ -44,11 +44,11 @@ class Cupid(Role):
 
         def link() -> None:
             self.lovers = [first, second]
-            group = state.ensure_group(f"lovers:{self.owner}", GroupKind.LOVERS, "lovers")
+            chat = state.ensure_chat(f"lovers:{self.owner}", ChatKind.LOVERS, "lovers")
             for me, partner in ((first, second), (second, first)):
                 add_modifier(state, state.player(me), "lover", partner=partner, cupid=self.owner,
                              reason="struck by Cupid's arrow")
-                group.add(me)
+                chat.add(me)
                 ctx.inform(me, f"💘 Cupid's arrow struck you: you are in love with **{state.name(partner)}**! You "
                                "share a chat now. If one of you dies, the other dies of a broken heart.")
             for me, partner in ((first, second), (second, first)):
@@ -58,13 +58,13 @@ class Cupid(Role):
 
         ctx.commit(link)
 
-    def protects_against(self, ctx: Resolution, kill: Kill) -> str | None:
-        if kill.cause == "lynch" and self.lovers and all(ctx.state.player(lover).alive for lover in self.lovers):
+    def protects_against(self, ctx: Resolution, attack: Attack) -> str | None:
+        if attack.cause == "lynch" and self.lovers and all(ctx.state.player(lover).alive for lover in self.lovers):
             return BOND
         return None
 
-    def on_kill_prevented(self, ctx: Resolution, kill: Kill) -> None:
-        if kill.cause == "lynch" and kill.prevented_by == BOND:
+    def on_attack_prevented(self, ctx: Resolution, attack: Attack) -> None:
+        if attack.cause == "lynch" and attack.prevented_by == BOND:
             ctx.state.emit(Announcement(title="CUPID", text=f"**{ctx.state.name(self.owner)}** is **Cupid**! The bond of "
                                                             "love protects them from the rope."))
 

@@ -41,7 +41,7 @@ flowchart TB
         RL["Roles/* Role and Modifier classes"]
     end
     subgraph Storage ["Storage/"]
-        CO["codec.py<br/>JSON + migrations"]
+        CO["codec.py<br/>state to JSON"]
         DB[("db.py<br/>SQLite")]
     end
     BOT --> COGS & RC
@@ -93,27 +93,27 @@ classDiagram
         user_id, display_name
         life: LifeState
         faction, original_role
-        family, private_group
-        public_status
+        family, private_chat
+        public_role
         last_active_at, inactivity_level
         true_faction()
         actors()
     }
-    class Actor {
+    class RoleBase {
         <<Polymorphic>>
-        owner, uses, last_used
+        owner, uses_spent, last_used
     }
     class Role
     class Modifier
-    class Group {
-        key, kind: GroupKind, name
+    class Chat {
+        key, kind: ChatKind, name
         channel_id
         members: dict id to Membership
         archived
     }
     class SubmittedAction {
         id, actor, source, ability
-        slot, targets, params
+        resolves_at, targets, params
         status: ActionStatus
     }
     class Ballot {
@@ -131,23 +131,23 @@ classDiagram
         notify_blocked_actions
     }
     GameState "1" *-- "*" Player : players
-    GameState "1" *-- "*" Group : groups
+    GameState "1" *-- "*" Chat : chats
     GameState "1" *-- "*" SubmittedAction : actions
     GameState "1" *-- "*" Ballot : ballots + archive
     GameState "1" *-- "*" Decision : decisions
-    GameState "1" *-- "*" Relay : relays
-    GameState "1" *-- "*" Seance : seances
+    GameState "1" *-- "*" Eavesdrop : eavesdrops
+    GameState "1" *-- "*" YesNoQuestion : questions
     GameState "1" *-- "*" TelepathMessage : telepathy
     GameState "1" *-- "*" NightOverride : night_overrides
     GameState "1" *-- "1" Settings
     Player "1" *-- "0..1" Role : role
     Player "1" *-- "*" Modifier : modifiers
-    Player "1" *-- "*" Status : statuses
+    Player "1" *-- "*" Condition : conditions
     Player "1" *-- "*" DeathRecord : deaths
     Ballot "1" *-- "*" VoteRecord : history
-    Relay "1" *-- "*" RelayMessage : messages
-    Actor <|-- Role
-    Actor <|-- Modifier
+    Eavesdrop "1" *-- "*" OverheardMessage : messages
+    RoleBase <|-- Role
+    RoleBase <|-- Modifier
 ```
 
 Some concepts that aren't obvious from the field names:
@@ -156,12 +156,12 @@ Some concepts that aren't obvious from the field names:
   skeleton that died again).
 - **Factions.** `player.faction` is the base faction. `player.true_faction()` lets modifiers override it; the most
   recently added override wins. Investigations use `apparent_faction`, which roles can disguise.
-- **Groups are every shared chat**, including private channels (`PRIVATE`), the village (`VILLAGE`) and the dead
-  chat (`DEAD`). Leaving a group sets the membership to `FORMER` (read-only), never removes it. `archived` makes
+- **A `Chat` is any game channel with members**, including private channels (`PRIVATE`), the village (`VILLAGE`)
+  and the dead chat (`DEAD`). Leaving a chat sets the membership to `FORMER` (read-only), never removes it. `archived` makes
   the whole chat read-only.
-- **Houses are families.** `state.house_of(pid)` returns the family's group key (or `house:<id>` for a player
+- **Houses are families.** `state.house_of(pid)` returns the family's chat key (or `house:<id>` for a player
   without a family). Locks, blessings, the Insomniac and the Diviner all work per house.
-- **Actions** are stored as data. `slot` says when an action resolves (`night:3`, `dusk:3` or `instant`).
+- **Actions** are stored as data. `resolves_at` says when an action resolves (`night:3`, `dusk:3` or `instant`).
   `status` records what happened (pending, replaced, cancelled, resolved, blocked, failed). Old actions are kept
   for the record.
 - **`state.data`** is a free-form dict for game-wide role data (the coven kill list, coven links, the
@@ -183,22 +183,14 @@ Some concepts that aren't obvious from the field names:
 - **Polymorphism.** A class family deriving from `Polymorphic` is written with a `"__type__"` tag. A field typed as
   `Role` then comes back as a `Seer`, `Witch` and so on. Families: `"actor"` (roles and modifiers, tagged by
   `name`) and `"effect"` (tagged by class name).
-- **Forgiving by design.** Missing fields get their defaults and unknown keys are ignored, so adding a field to a
-  role never breaks a stored game. A stored role whose class no longer exists (its file was deleted) loads as
-  `MissingActor`, which keeps the raw data and writes it back unchanged.
+- **Forgiving by design.** Missing fields get their defaults and unknown keys are ignored, so adding or removing
+  a field on a role doesn't break a stored game. Loading a game that still contains a role or effect whose class
+  no longer exists fails with a clear error.
 
-[Storage/codec.py](../Storage/codec.py) wraps this into `encode(state) -> str` and `decode(text, version)`. When a
-change needs more than "missing field gets its default", bump `STATE_VERSION` and add a migration. For example:
-
-```python
-STATE_VERSION = 2
-
-def _v1_categories(data):        # v1 kept one flat list of categories; v2 keeps them per kind
-    old = data.get("categories") or []
-    return {**data, "categories": {"legacy": old} if isinstance(old, list) and old else {}}
-
-MIGRATIONS = {1: _v1_categories}  # from version -> to version + 1
-```
+[Storage/codec.py](../Storage/codec.py) wraps this into `encode(state) -> str` and `decode(text) -> GameState`.
+There is no versioning or migration layer: the bot only runs one event at a time, so a game is always loaded by
+the code that saved it. If you change the stored shape in a way the forgiving loader can't handle (e.g. renaming
+a field), finish or delete running games first.
 
 ---
 
@@ -220,7 +212,6 @@ erDiagram
         text phase
         int day
         text state "GameState as JSON"
-        int state_version
         text created_at
         text updated_at
     }
@@ -231,7 +222,6 @@ erDiagram
         int day
         text phase
         text state
-        int state_version
         text created_at
     }
     reports {
@@ -355,7 +345,7 @@ sequenceDiagram
     GS->>FL: run_transition(MORNING)
     FL->>RE: resolve_night(real state, same seed)
     RE-->>FL: deaths, messages (effects), report
-    FL->>FL: day += 1, phase = DAY, expire statuses
+    FL->>FL: day += 1, phase = DAY, expire conditions
     S->>S: final report != last preview? then alert the GMs
     GS->>DB: commit
 ```
@@ -378,13 +368,13 @@ The engine asks for side effects by emitting `Effect` dataclasses ([Core/effects
 | Effect | Delivered as |
 |---|---|
 | `PrivateMessage` | embed in the player's private channel (split if long) |
-| `GroupMessage` | embed in a group's channel |
-| `Announcement`, `VoteChannelPost`, `NewspaperPost` | the announcements channel |
+| `ChatMessage` | embed in a chat's channel |
+| `Announcement`, `VoteResults`, `NewspaperPost` | the announcements channel |
 | `RoleCard` | role card in the private channel |
-| `CreateChannel` | creates the channel for a group made during the game |
+| `CreateChannel` | creates the channel for a chat made during the game |
 | `DecisionPrompt` | select menu for the chooser (or in #mod-log for the GMs) |
-| `SeancePrompt` | yes/no buttons (dead chat, or a private channel for the Open Book) |
-| `TelepathyPrompt` | message with a Reply button |
+| `QuestionPrompt` | yes/no buttons (dead chat, or a private channel for the Open Book) |
+| `TelepathPrompt` | message with a Reply button |
 | `DirectMessage` | a Discord DM |
 
 **Delivery.**
@@ -393,19 +383,19 @@ The engine asks for side effects by emitting `Effect` dataclasses ([Core/effects
 - Because effects are saved with the state, a crash just means they're delivered after the restart.
 
 **Persistent components.** Buttons and menus are `DynamicItem`s with the ids in their `custom_id`, for example
-`xpw:seance:<guild>:<seance id>:yes`. `bot.add_dynamic_items(*DYNAMIC_ITEMS)` re-attaches them after a restart.
+`xpw:question:<guild>:<question id>:yes`. `bot.add_dynamic_items(*DYNAMIC_ITEMS)` re-attaches them after a restart.
 See [Services/views.py](../Services/views.py).
 
 ---
 
 ## 8. Channel access
 
-Who may see or write where is **never stored**. It's derived from the state by `player_access(state, group,
+Who may see or write where is **never stored**. It's derived from the state by `player_access(state, chat,
 player)` in [Core/access.py](../Core/access.py), which returns `WRITE`, `READ`, `REACT` or `NONE`.
 
 ```mermaid
 flowchart TD
-    S{group kind} -->|VILLAGE| V{player}
+    S{chat kind} -->|VILLAGE| V{player}
     V -->|alive| V1["WRITE (READ during lockdown)"]
     V -->|skeleton| V2[REACT]
     V -->|dead| V3[READ]
@@ -424,7 +414,7 @@ flowchart TD
 
 **The reconciler.** `ChannelManager.sync` compares this with each channel's current permission overwrites and
 changes only what differs. It runs after every change and on startup, so manual edits in Discord get corrected.
-Public Discord roles (Dead / Vengeful Spirit / Skeleton) follow `player.public_status`, which is updated at the
+Public Discord roles (Dead / Vengeful Spirit / Skeleton) follow `player.public_role`, which is updated at the
 newspaper (or straight away for a lynch).
 
 **Categories.** Channels are created in categories by kind: Important (announcements), General (village, dead
@@ -439,7 +429,7 @@ names are reused. Channels are never renamed.
 |---|---|---|
 | `ROLE_REGISTRY` / `MODIFIER_REGISTRY` | `Core/actor.py` | `@register_role` / `@register_modifier` |
 | `FACTIONS` | `Core/factions.py` | `register_faction(Faction(...))`, with the win check |
-| `GROUP_DEFS` | `Core/flow.py` | `register_group(key, kind, channel_name)` |
+| `GROUP_DEFS` | `Core/flow.py` | `register_chat(key, kind, channel_name)` |
 | `CONVERSIONS` | `Core/resolution.py` | `register_conversion(kind, fn)` |
 | `PREPARE_HOOKS` / `FINAL_HOOKS` | `Core/resolution.py` | `register_prepare_hook` / `register_final_hook` |
 | `DECISION_HANDLERS` | `Core/flow.py` | `DECISION_HANDLERS["kind"] = fn` |
@@ -462,6 +452,6 @@ All of these are filled at import time. Importing `Roles` (which `bot.py` and th
 | add a kind of message or Discord side effect | an `Effect` subclass in `Core/effects.py` + a branch in `EffectDelivery.apply` |
 | add a GM tool | a command in `Cogs/gm.py` (watch the 25-subcommand limit; there's a `clock` subgroup) |
 | change who sees which channel | `Core/access.py` |
-| change stored data in a breaking way | bump `STATE_VERSION` + add a migration in `Storage/codec.py` |
+| change the stored shape of the state | just change the dataclasses; finish or delete running games first if a field is renamed |
 | add a database table | `SCHEMA` in `Storage/db.py` (`CREATE TABLE IF NOT EXISTS` runs on every start) |
 | change the player guide | role descriptions/abilities, then `python tools/generate_docs.py` |

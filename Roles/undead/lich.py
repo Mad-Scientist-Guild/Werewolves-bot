@@ -9,7 +9,7 @@ class Lich(Role):
     name = "lich"
     display = "Lich"
     faction = UNDEAD
-    groups = ("undead",)
+    chats = ("undead",)
     description = (
         "You must raise an army to take over the town. Once a night you can pick two different dead players and "
         "guess their roles: everyone you guess right rises as your Skeleton and joins your private chat. You can "
@@ -47,14 +47,14 @@ class Lich(Role):
             else:
                 ctx.inform(self.owner, f"The grave of **{body.display_name}** stays quiet - your guess was wrong.")
 
-    def protects_against(self, ctx: Resolution, kill: Kill) -> str | None:
-        return None if kill.cause == "lynch" else ONLY_LYNCH
+    def protects_against(self, ctx: Resolution, attack: Attack) -> str | None:
+        return None if attack.cause == "lynch" else ONLY_LYNCH
 
     def on_death(self, ctx: Resolution, record: DeathRecord) -> None:
         for player in ctx.state.players.values():
             skeleton = player.modifier("skeleton")
             if skeleton is not None and skeleton.lich == self.owner and player.life is LifeState.SKELETON:
-                ctx.kill(player.user_id, "the Lich died", killers=[self.owner], killer_role=self.name,
+                ctx.attack(player.user_id, "the Lich died", killers=[self.owner], killer_role=self.name,
                          unstoppable=True, enters_house=False)
 
 

@@ -16,7 +16,7 @@ from Core.state import GameState, Phase, Schedule, Transition
 
 class TransitionKind(str, Enum):
     MORNING = "morning"                # 08:00 - apply the night, day begins
-    NEWSPAPER = "newspaper"            # 12:00 - newspaper, public statuses, lynch opens
+    NEWSPAPER = "newspaper"            # 12:00 - newspaper, public roles, lynch opens
     DUSK = "dusk"                      # 19:00 - lynch closes, day actions resolve, night begins
     SECOND_LYNCH_END = "second_lynch_end"  # 20:00 - only when a second lynch is running
     NIGHT_LOCK = "night_lock"          # 00:00 - night actions lock, preview for the GMs

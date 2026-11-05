@@ -6,7 +6,7 @@ NOT_COPYABLE = frozenset({"actor", "villager", "adopted_child", "brother", "grav
 
 
 @register_role
-class TheActor(Role):
+class ActorRole(Role):
     name = "actor"
     display = "Actor"
     faction = VILLAGERS
@@ -77,21 +77,21 @@ class TheActor(Role):
         raise AttributeError(name)
 
     # hooks of the copied role keep working while it's being played
-    def protects_against(self, ctx: Resolution, kill: Kill) -> str | None:
+    def protects_against(self, ctx: Resolution, attack: Attack) -> str | None:
         copy = self.playing(ctx.state)
-        return copy.protects_against(ctx, kill) if copy else None
+        return copy.protects_against(ctx, attack) if copy else None
 
     def defeats_stalkers(self, state: GameState, action: SubmittedAction) -> bool:
         copy = self.playing(state)
         return copy.defeats_stalkers(state, action) if copy else False
 
-    def on_kill_prevented(self, ctx: Resolution, kill: Kill) -> None:
+    def on_attack_prevented(self, ctx: Resolution, attack: Attack) -> None:
         if (copy := self.playing(ctx.state)) is not None:
-            copy.on_kill_prevented(ctx, kill)
+            copy.on_attack_prevented(ctx, attack)
 
-    def on_other_killed(self, ctx: Resolution, kill: Kill) -> None:
+    def on_other_killed(self, ctx: Resolution, attack: Attack) -> None:
         if (copy := self.playing(ctx.state)) is not None:
-            copy.on_other_killed(ctx, kill)
+            copy.on_other_killed(ctx, attack)
 
     def on_other_converted(self, ctx: Resolution, player: Player, kind: str, by: int) -> None:
         if (copy := self.playing(ctx.state)) is not None:

@@ -30,15 +30,15 @@ class Gambler(Role):
         # TODO(gambler): the GMs haven't decided whether protections (Silver Angel, Priest blessing,
         # Enchantress charm) can save the Gambler. For now protections apply, and the GMs are alerted
         # whenever one did, so they can override with /gm override kill if needed.
-        kill = ctx.kill(self.owner, "gambler", killers=[target.user_id], killer_role=target.role_name,
+        attack = ctx.attack(self.owner, "gambler", killers=[target.user_id], killer_role=target.role_name,
                         attacker_faction=faction, enters_house=False, action=action)
 
         def check() -> None:
-            if kill.prevented_by:
+            if attack.prevented_by:
                 ctx.note("Notes", f"Gambler {ctx.state.name(self.owner)} survived visiting an evil player "
-                                  f"({kill.prevented_by}) - rule undecided, check this.")
+                                  f"({attack.prevented_by}) - rule undecided, check this.")
                 ctx.state.log("GAMBLER", f"{ctx.state.name(self.owner)} survived visiting evil "
-                                         f"{target.display_name} because: {kill.prevented_by}. The protection rule for "
+                                         f"{target.display_name} because: {attack.prevented_by}. The protection rule for "
                                          "the Gambler is undecided - override if needed.", alert=True)
             elif target.role_name == "lich" and "skeleton" in CONVERSIONS:
                 ctx.convert("skeleton", self.owner, by=target.user_id)

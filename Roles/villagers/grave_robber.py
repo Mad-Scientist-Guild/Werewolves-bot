@@ -28,7 +28,7 @@ class GraveRobber(Role):
         target = state.player(action.target)
         if target.life is LifeState.PERMA_DEAD or target.has_modifier("skeleton"):
             raise GameError("You can't plunder the grave of a Skeleton.")
-        if target.role is None or target.role.name == "_missing":
+        if target.role is None:
             raise GameError("There is nothing to take from this grave.")
 
     def resolve_rob(self, ctx: Resolution, action: SubmittedAction) -> None:

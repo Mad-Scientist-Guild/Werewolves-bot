@@ -13,7 +13,7 @@ from Core.actions import TIME_RE, normalise_role
 from Core.actor import MODIFIER_REGISTRY, ROLE_REGISTRY
 from Core.errors import GameError
 from Core.flow import family_members
-from Core.state import GroupKind, Phase
+from Core.state import ChatKind, Phase
 from Services.discord_utils import is_gm, reply, reply_long
 from Services.role_commands import role_autocomplete
 from Services.runtime import runtime
@@ -160,10 +160,10 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
         async with runtime.games.mutate(interaction.guild_id) as state:
             if size is not None:
                 state.settings.family_size = size
-            groups = flow.split_families(state, size=state.settings.family_size,
+            families = flow.split_families(state, size=state.settings.family_size,
                                          rng_seed=random.SystemRandom().randrange(1, 2**31))
             text = "\n".join(f"**{g.name}**: {', '.join(p.display_name for p in family_members(state, g.key))}"
-                             for g in groups)
+                             for g in families)
         await reply_long(interaction, "Families", text)
 
     @app_commands.command(name="family_move", description="Move a player to another family (family number)")
@@ -171,8 +171,8 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
                           family: app_commands.Range[int, 1, 50]) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             key = f"family:{family}"
-            if key not in state.groups:
-                state.ensure_group(key, GroupKind.FAMILY, f"family-{family}")
+            if key not in state.chats:
+                state.ensure_chat(key, ChatKind.FAMILY, f"family-{family}")
             flow.set_family(state, state.player(member.id), key)
         await reply(interaction, f"{member.display_name} is now in family {family}.")
 
@@ -186,9 +186,9 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             if missing:
                 raise GameError("Assign roles first - private channels are named after them. Missing: "
                                 + ", ".join(missing))
-            flow.ensure_base_groups(state)
+            flow.ensure_base_chats(state)
         await runtime.channels.setup_base(interaction.guild, handle)
-        created = await runtime.channels.ensure_group_channels(interaction.guild, handle)
+        created = await runtime.channels.ensure_chat_channels(interaction.guild, handle)
         await runtime.channels.sync(interaction.guild, handle)
         await reply(interaction, f"Created {created} channel(s); permissions synced.")
 

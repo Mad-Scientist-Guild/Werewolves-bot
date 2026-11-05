@@ -70,78 +70,78 @@ async def _safe(interaction: discord.Interaction, coro) -> None:
             await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
 
 
-class SeanceButton(discord.ui.DynamicItem[discord.ui.Button],
-                   template=r"xpw:seance:(?P<guild>\d+):(?P<seance>\d+):(?P<answer>yes|no)"):
-    def __init__(self, guild_id: int, seance_id: int, answer: str):
-        self.guild_id, self.seance_id, self.answer = guild_id, seance_id, answer
+class AnswerButton(discord.ui.DynamicItem[discord.ui.Button],
+                   template=r"xpw:question:(?P<guild>\d+):(?P<question>\d+):(?P<answer>yes|no)"):
+    def __init__(self, guild_id: int, question_id: int, answer: str):
+        self.guild_id, self.question_id, self.answer = guild_id, question_id, answer
         super().__init__(discord.ui.Button(
             label="Yes" if answer == "yes" else "No",
             style=discord.ButtonStyle.success if answer == "yes" else discord.ButtonStyle.danger,
-            custom_id=f"xpw:seance:{guild_id}:{seance_id}:{answer}",
+            custom_id=f"xpw:question:{guild_id}:{question_id}:{answer}",
         ))
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button,
-                             match: re.Match[str], /) -> "SeanceButton":
-        return cls(int(match["guild"]), int(match["seance"]), match["answer"])
+                             match: re.Match[str], /) -> "AnswerButton":
+        return cls(int(match["guild"]), int(match["question"]), match["answer"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         async def run() -> None:
             from Core import realtime
             async with runtime.games.mutate(self.guild_id) as state:
-                seance = realtime.answer_seance(state, self.seance_id, interaction.user.id, self.answer == "yes")
-                closed = seance.done
+                question = realtime.answer_question(state, self.question_id, interaction.user.id, self.answer == "yes")
+                closed = question.done
             text = "Your answer was recorded." + (" Everyone has answered - the Spiritualist gets the result now."
-                                                 if closed else " You can change it until the séance closes.")
+                                                 if closed else " You can change it until the question closes.")
             await interaction.response.send_message(text, ephemeral=True)
         await _safe(interaction, run())
 
 
-def seance_view(guild_id: int, seance_id: int) -> discord.ui.View:
+def answer_view(guild_id: int, question_id: int) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
-    view.add_item(SeanceButton(guild_id, seance_id, "yes"))
-    view.add_item(SeanceButton(guild_id, seance_id, "no"))
+    view.add_item(AnswerButton(guild_id, question_id, "yes"))
+    view.add_item(AnswerButton(guild_id, question_id, "no"))
     return view
 
 
-class TelepathyReplyModal(discord.ui.Modal, title="Reply (max 20 words)"):
+class TelepathReplyModal(discord.ui.Modal, title="Reply (max 20 words)"):
     text = discord.ui.TextInput(label="Your reply", style=discord.TextStyle.paragraph, max_length=300)
 
-    def __init__(self, guild_id: int, telepathy_id: int):
+    def __init__(self, guild_id: int, telepath_message_id: int):
         super().__init__()
-        self.guild_id, self.telepathy_id = guild_id, telepathy_id
+        self.guild_id, self.telepath_message_id = guild_id, telepath_message_id
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         async def run() -> None:
             from Core import realtime
             from Core.clock import now_in
             async with runtime.games.mutate(self.guild_id) as state:
-                realtime.reply_telepathy(state, self.telepathy_id, interaction.user.id, str(self.text.value),
+                realtime.reply_telepath_message(state, self.telepath_message_id, interaction.user.id, str(self.text.value),
                                          now_in(state))
             await interaction.response.send_message("Your reply is on its way.", ephemeral=True)
         await _safe(interaction, run())
 
 
-class TelepathyReplyButton(discord.ui.DynamicItem[discord.ui.Button],
-                           template=r"xpw:telepathy:(?P<guild>\d+):(?P<message>\d+)"):
-    def __init__(self, guild_id: int, telepathy_id: int):
-        self.guild_id, self.telepathy_id = guild_id, telepathy_id
+class TelepathReplyButton(discord.ui.DynamicItem[discord.ui.Button],
+                           template=r"xpw:telepath:(?P<guild>\d+):(?P<message>\d+)"):
+    def __init__(self, guild_id: int, telepath_message_id: int):
+        self.guild_id, self.telepath_message_id = guild_id, telepath_message_id
         super().__init__(discord.ui.Button(label="Reply", style=discord.ButtonStyle.primary,
-                                           custom_id=f"xpw:telepathy:{guild_id}:{telepathy_id}"))
+                                           custom_id=f"xpw:telepath:{guild_id}:{telepath_message_id}"))
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button,
-                             match: re.Match[str], /) -> "TelepathyReplyButton":
+                             match: re.Match[str], /) -> "TelepathReplyButton":
         return cls(int(match["guild"]), int(match["message"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(TelepathyReplyModal(self.guild_id, self.telepathy_id))
+        await interaction.response.send_modal(TelepathReplyModal(self.guild_id, self.telepath_message_id))
 
 
-def telepathy_view(guild_id: int, telepathy_id: int) -> discord.ui.View:
+def telepath_view(guild_id: int, telepath_message_id: int) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
-    view.add_item(TelepathyReplyButton(guild_id, telepathy_id))
+    view.add_item(TelepathReplyButton(guild_id, telepath_message_id))
     return view
 
 
-DYNAMIC_ITEMS = (DecisionSelect, SeanceButton, TelepathyReplyButton)
+DYNAMIC_ITEMS = (DecisionSelect, AnswerButton, TelepathReplyButton)

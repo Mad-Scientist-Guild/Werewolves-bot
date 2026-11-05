@@ -18,13 +18,13 @@ from Core.effects import (
     DecisionPrompt,
     DirectMessage,
     Effect,
-    GroupMessage,
+    ChatMessage,
     NewspaperPost,
     PrivateMessage,
     RoleCard,
-    SeancePrompt,
-    TelepathyPrompt,
-    VoteChannelPost,
+    QuestionPrompt,
+    TelepathPrompt,
+    VoteResults,
 )
 from Core.factions import faction_display
 from Core.serialize import load
@@ -33,7 +33,7 @@ from Services.channels import ChannelManager
 from Services.discord_utils import chunks, embed
 from Services.game_service import GameHandle, GameService
 from Services.role_commands import ability_help
-from Services.views import decision_embed, decision_view, seance_view, telepathy_view
+from Services.views import decision_embed, decision_view, answer_view, telepath_view
 from Storage.db import Database
 
 log = logging.getLogger("werewolves.effects")
@@ -78,14 +78,14 @@ class EffectDelivery:
             raise DeliveryError(f"channel {channel_id} not found")
         return channel
 
-    def _group_channel(self, guild: discord.Guild, state: GameState, group_key: str | None) -> discord.TextChannel:
-        group = state.groups.get(group_key) if group_key else None
-        if group is None:
-            raise DeliveryError(f"group {group_key} not found")
-        return self._channel(guild, group.channel_id)
+    def _chat_channel(self, guild: discord.Guild, state: GameState, chat_key: str | None) -> discord.TextChannel:
+        chat = state.chats.get(chat_key) if chat_key else None
+        if chat is None:
+            raise DeliveryError(f"chat {chat_key} not found")
+        return self._channel(guild, chat.channel_id)
 
     def _private(self, guild: discord.Guild, state: GameState, player_id: int) -> discord.TextChannel:
-        return self._group_channel(guild, state, state.player(player_id).private_group)
+        return self._chat_channel(guild, state, state.player(player_id).private_chat)
 
     # --- dispatch ------------------------------------------------------------
     async def apply(self, guild: discord.Guild, handle: GameHandle, effect: Effect) -> None:
@@ -99,13 +99,13 @@ class EffectDelivery:
                 if len(pieces) > 1:
                     title = f"{title} ({index + 1}/{len(pieces)})"
                 await channel.send(embed=embed(title, piece, color_name="blue", footer=footer))
-        elif isinstance(effect, GroupMessage):
-            channel = self._group_channel(guild, state, effect.group)
+        elif isinstance(effect, ChatMessage):
+            channel = self._chat_channel(guild, state, effect.chat)
             await channel.send(embed=embed(effect.title, effect.text, color_name="blue", footer=footer))
         elif isinstance(effect, Announcement):
             channel = self._channel(guild, state.channels.get("announcements"))
             await channel.send(embed=embed(effect.title, effect.text, color_name=effect.color, footer=footer))
-        elif isinstance(effect, VoteChannelPost):
+        elif isinstance(effect, VoteResults):
             channel = self._channel(guild, state.channels.get("announcements"))
             await channel.send(embed=embed(effect.title, effect.text, color_name="gold", footer=footer))
         elif isinstance(effect, NewspaperPost):
@@ -117,34 +117,34 @@ class EffectDelivery:
             channel = self._private(guild, state, effect.player)
             await channel.send(embed=role_card(state, effect))
         elif isinstance(effect, CreateChannel):
-            await self.channels.ensure_group_channels(guild, handle)
+            await self.channels.ensure_chat_channels(guild, handle)
         elif isinstance(effect, DecisionPrompt):
             await self._decision(guild, handle, effect.decision_id)
         elif isinstance(effect, DirectMessage):
             user = guild.get_member(effect.user_id) or await self.bot.fetch_user(effect.user_id)
             await user.send(effect.text)
-        elif isinstance(effect, SeancePrompt):
-            seance = next((s for s in state.seances if s.id == effect.seance_id), None)
-            if seance is None or seance.done:
+        elif isinstance(effect, QuestionPrompt):
+            question = next((s for s in state.questions if s.id == effect.question_id), None)
+            if question is None or question.done:
                 return
-            channel = self._group_channel(guild, state, seance.where)
-            if seance.kind == "open_book":
+            channel = self._chat_channel(guild, state, question.where)
+            if question.kind == "open_book":
                 title = "📖 You are enchanted: Charm of the Open Book"
-                text = f"You must answer this question honestly:\n> **{seance.question}**"
+                text = f"You must answer this question honestly:\n> **{question.text}**"
             else:
                 title = "🕯️ The Spiritualist calls upon the dead"
-                text = (f"A voice from the land of the living asks:\n> **{seance.question}**\n\n"
+                text = (f"A voice from the land of the living asks:\n> **{question.text}**\n\n"
                         "Answer honestly - the dead may not lie. The Spiritualist only learns how many said yes and no.")
-            await channel.send(embed=embed(title, text, color_name="purple"), view=seance_view(guild.id, seance.id))
-        elif isinstance(effect, TelepathyPrompt):
-            message = next((m for m in state.telepathy if m.id == effect.telepathy_id), None)
+            await channel.send(embed=embed(title, text, color_name="purple"), view=answer_view(guild.id, question.id))
+        elif isinstance(effect, TelepathPrompt):
+            message = next((m for m in state.telepath_messages if m.id == effect.telepath_message_id), None)
             if message is None:
                 return
             channel = self._private(guild, state, message.target)
             text = (f"A message reached you through a Game Master:\n> “{message.text}”\n\n"
                     "You can send one reply of at most 20 words.")
             await channel.send(embed=embed("📨 A telepathic message", text, color_name="blue"),
-                               view=telepathy_view(guild.id, message.id))
+                               view=telepath_view(guild.id, message.id))
         else:
             raise DeliveryError(f"no delivery for {type(effect).__name__}")
 

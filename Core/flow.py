@@ -12,24 +12,24 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from Core import voting
-from Core.access import publish_statuses
+from Core.access import publish_public_roles
 from Core.actor import Modifier, Role, modifier_class, role_class
 from Core.clock import TransitionKind, next_transition
-from Core.effects import Announcement, DecisionPrompt, NewspaperPost, RoleCard, VoteChannelPost
+from Core.effects import Announcement, DecisionPrompt, NewspaperPost, RoleCard, VoteResults
 from Core.errors import GameError
 from Core.factions import faction_display, winners
 from Core.resolution import Outcome, Resolution, register_final_hook
 from Core.state import (
     Decision,
     GameState,
-    Group,
-    GroupKind,
+    Chat,
+    ChatKind,
     LifeState,
     Membership,
     NightOverride,
     Phase,
     Player,
-    Status,
+    Condition,
 )
 
 
@@ -45,31 +45,31 @@ class FlowResult:
 
 # --- shared chats ---------------------------------------------------------------
 
-# group key -> (kind, channel name). Roles declare membership with `groups = ("wolves",)`.
-GROUP_DEFS: dict[str, tuple[GroupKind, str]] = {}
+# chat key -> (kind, channel name). Roles declare membership with `chats = ("wolves",)`.
+CHAT_DEFS: dict[str, tuple[ChatKind, str]] = {}
 
 
-def register_group(key: str, kind: GroupKind, channel_name: str) -> None:
-    GROUP_DEFS[key] = (kind, channel_name)
+def register_chat(key: str, kind: ChatKind, channel_name: str) -> None:
+    CHAT_DEFS[key] = (kind, channel_name)
 
 
-register_group("wolves", GroupKind.WOLVES, "werewolves")
-register_group("undead", GroupKind.UNDEAD, "undead")
+register_chat("wolves", ChatKind.WOLVES, "werewolves")
+register_chat("undead", ChatKind.UNDEAD, "undead")
 
 
-def join_group(state: GameState, player: Player, key: str) -> Group:
-    kind, name = GROUP_DEFS.get(key, (GroupKind.CUSTOM, key))
-    group = state.ensure_group(key, kind, name)
-    if group.members.get(player.user_id) is not Membership.ACTIVE:
-        group.add(player.user_id)
-        state.log("GROUP", f"{player.display_name} joins {group.name}.", actor=player.user_id)
-    return group
+def join_chat(state: GameState, player: Player, key: str) -> Chat:
+    kind, name = CHAT_DEFS.get(key, (ChatKind.CUSTOM, key))
+    chat = state.ensure_chat(key, kind, name)
+    if chat.members.get(player.user_id) is not Membership.ACTIVE:
+        chat.add(player.user_id)
+        state.log("CHAT", f"{player.display_name} joins {chat.name}.", actor=player.user_id)
+    return chat
 
 
-def join_actor_groups(state: GameState, player: Player) -> None:
+def join_actor_chats(state: GameState, player: Player) -> None:
     for actor in player.actors():
-        for key in actor.groups:
-            join_group(state, player, key)
+        for key in actor.chats:
+            join_chat(state, player, key)
 
 
 # --- seeds ----------------------------------------------------------------------
@@ -101,8 +101,8 @@ def remove_player(state: GameState, user_id: int) -> None:
         raise GameError("Players can't be removed once the game has started - use the reaper instead.")
     player = state.player(user_id)
     del state.players[user_id]
-    for group in state.groups.values():
-        group.members.pop(user_id, None)
+    for chat in state.chats.values():
+        chat.members.pop(user_id, None)
     state.log("PLAYER", f"{player.display_name} left the game.", actor=user_id)
 
 
@@ -111,20 +111,20 @@ def set_role(state: GameState, player: Player, role_name: str, *, keep_faction: 
     cls = role_class(role_name)
     old = player.role_name
     if state.phase is Phase.SETUP:
-        private = state.groups.get(player.private_group) if player.private_group else None
+        private = state.chats.get(player.private_chat) if player.private_chat else None
         if private is not None and private.channel_id is not None:
             raise GameError(f"{player.display_name}'s private channel already exists and is named after their "
                             "role - change roles before creating channels, or use `/gm set_role` once the game runs.")
-        for key in (player.role.groups if player.role else ()):
-            if key in state.groups:
-                state.groups[key].members.pop(player.user_id, None)
+        for key in (player.role.chats if player.role else ()):
+            if key in state.chats:
+                state.chats[key].members.pop(player.user_id, None)
     player.role = cls(owner=player.user_id)
     if not keep_faction:
         player.faction = cls.faction
     if state.phase is Phase.SETUP:
         player.original_role = cls.name
     else:
-        join_actor_groups(state, player)
+        join_actor_chats(state, player)
         if notify:
             state.emit(RoleCard(player=player.user_id, role=cls.name, changed=old is not None, note=note))
     state.log("ROLE", f"{player.display_name}: {old or 'no role'} → {cls.name}"
@@ -139,7 +139,7 @@ def adopt_role(state: GameState, player: Player, role: Role, *, reason: str, not
     new.owner = player.user_id
     old = player.role_name
     player.role = new
-    join_actor_groups(state, player)
+    join_actor_chats(state, player)
     state.emit(RoleCard(player=player.user_id, role=new.name, changed=True, note=note))
     state.log("ROLE", f"{player.display_name}: {old} → {new.name} ({reason}, charges carried over)", actor=player.user_id)
     return new
@@ -153,7 +153,7 @@ def add_modifier(state: GameState, player: Player, name: str, *, reason: str = "
     modifier = cls(owner=player.user_id, **fields)
     player.modifiers.append(modifier)
     if state.phase is not Phase.SETUP:
-        join_actor_groups(state, player)
+        join_actor_chats(state, player)
     state.log("MODIFIER", f"{player.display_name} gains {cls.name}" + (f" ({reason})" if reason else ""),
               actor=player.user_id)
     return modifier
@@ -197,7 +197,7 @@ def apply_assignment(state: GameState, mapping: dict[int, str]) -> None:
         set_role(state, state.player(user_id), role_name, reason="assignment")
 
 
-def split_families(state: GameState, *, size: int, rng_seed: int | None = None) -> list[Group]:
+def split_families(state: GameState, *, size: int, rng_seed: int | None = None) -> list[Chat]:
     if state.phase is not Phase.SETUP:
         raise GameError("Families can only be formed before the game starts.")
     players = sorted(state.players)
@@ -206,10 +206,10 @@ def split_families(state: GameState, *, size: int, rng_seed: int | None = None) 
     rng = random.Random(rng_seed)
     rng.shuffle(players)
     count = max(1, round(len(players) / max(1, size)))
-    for group in state.groups_of_kind(GroupKind.FAMILY):
-        del state.groups[group.key]
+    for chat in state.chats_of_kind(ChatKind.FAMILY):
+        del state.chats[chat.key]
     families = [
-        state.ensure_group(f"family:{i + 1}", GroupKind.FAMILY, f"family-{i + 1}") for i in range(count)
+        state.ensure_chat(f"family:{i + 1}", ChatKind.FAMILY, f"family-{i + 1}") for i in range(count)
     ]
     for index, user_id in enumerate(players):
         family = families[index % count]
@@ -221,11 +221,11 @@ def split_families(state: GameState, *, size: int, rng_seed: int | None = None) 
 
 
 def set_family(state: GameState, player: Player, family_key: str) -> None:
-    family = state.group(family_key)
-    if family.kind is not GroupKind.FAMILY:
+    family = state.chat(family_key)
+    if family.kind is not ChatKind.FAMILY:
         raise GameError("That isn't a family.")
-    if player.family and player.family in state.groups:
-        old = state.groups[player.family]
+    if player.family and player.family in state.chats:
+        old = state.chats[player.family]
         if state.phase is Phase.SETUP:
             old.members.pop(player.user_id, None)
         else:
@@ -236,28 +236,28 @@ def set_family(state: GameState, player: Player, family_key: str) -> None:
 
 
 def family_members(state: GameState, family_key: str | None) -> list[Player]:
-    if family_key is None or family_key not in state.groups:
+    if family_key is None or family_key not in state.chats:
         return []
-    return [state.players[u] for u in state.groups[family_key].active_members() if u in state.players]
+    return [state.players[u] for u in state.chats[family_key].active_members() if u in state.players]
 
 
-def ensure_base_groups(state: GameState) -> None:
-    """Village, dead chat and one private group per player."""
-    state.ensure_group("village", GroupKind.VILLAGE, "village-chat")
-    state.ensure_group("dead", GroupKind.DEAD, "dead-chat")
+def ensure_base_chats(state: GameState) -> None:
+    """Village, dead chat and one private chat per player."""
+    state.ensure_chat("village", ChatKind.VILLAGE, "village-chat")
+    state.ensure_chat("dead", ChatKind.DEAD, "dead-chat")
     taken: dict[str, int] = {}
     for player in sorted(state.players.values(), key=lambda p: p.user_id):
-        if player.private_group is not None:
+        if player.private_chat is not None:
             continue
         base = (player.role_name or "player").replace("_", "-")
         taken[base] = taken.get(base, 0) + 1
         name = base if taken[base] == 1 else f"{base}-{taken[base]}"
-        group = state.ensure_group(f"private:{player.user_id}", GroupKind.PRIVATE, name,
+        chat = state.ensure_chat(f"private:{player.user_id}", ChatKind.PRIVATE, name,
                                    topic=f"Private channel of {player.display_name}")
-        group.add(player.user_id)
-        player.private_group = group.key
+        chat.add(player.user_id)
+        player.private_chat = chat.key
     for player in state.players.values():
-        join_actor_groups(state, player)
+        join_actor_chats(state, player)
 
 
 # --- start / end ----------------------------------------------------------------
@@ -271,7 +271,7 @@ def start_game(state: GameState, now: datetime) -> FlowResult:
     if missing:
         raise GameError(f"These players have no role yet: {', '.join(missing)}")
 
-    ensure_base_groups(state)
+    ensure_base_chats(state)
     state.phase = Phase.DAY
     state.day = 1
     state.started_at = now.isoformat()
@@ -326,12 +326,12 @@ def run_transition(state: GameState, kind: TransitionKind, scheduled: datetime) 
     return result
 
 
-def _expire_statuses(state: GameState, slot: str) -> None:
+def _expire_conditions(state: GameState, moment: str) -> None:
     for player in state.players.values():
-        expired = [s for s in player.statuses if s.expires == slot]
+        expired = [s for s in player.conditions if s.expires == moment]
         if expired:
-            player.statuses = [s for s in player.statuses if s.expires != slot]
-            state.log("STATUS", f"{player.display_name}: expired {', '.join(s.key for s in expired)}",
+            player.conditions = [s for s in player.conditions if s.expires != moment]
+            state.log("CONDITION", f"{player.display_name}: expired {', '.join(s.key for s in expired)}",
                       actor=player.user_id)
 
 
@@ -344,15 +344,15 @@ def _morning(state: GameState, result: FlowResult) -> None:
 
     state.day += 1
     state.phase = Phase.DAY
-    _expire_statuses(state, f"morning:{state.day}")
+    _expire_conditions(state, f"morning:{state.day}")
     state.emit(Announcement(title=f"DAY {state.day}", text="The sun rises over XP. A new day begins."))
 
 
 def _newspaper(state: GameState, result: FlowResult) -> None:
-    changed = publish_statuses(state)
+    changed = publish_public_roles(state)
     if changed:
-        state.log("PUBLIC", "Public statuses updated: " + ", ".join(
-            f"{p.display_name} → {p.public_status.value}" for p in changed))
+        state.log("PUBLIC", "Public roles updated: " + ", ".join(
+            f"{p.display_name} → {p.public_role.value}" for p in changed))
     url = state.settings.newspaper_url
     if url:
         state.emit(NewspaperPost(url=url))
@@ -370,7 +370,7 @@ def _newspaper(state: GameState, result: FlowResult) -> None:
 
 def _dusk(state: GameState, result: FlowResult) -> None:
     day = state.day
-    _expire_statuses(state, f"dusk:{day}")
+    _expire_conditions(state, f"dusk:{day}")
 
     mayor_ballot = voting.close_ballot(state, voting.MAYOR)
     if mayor_ballot is not None:
@@ -379,7 +379,7 @@ def _dusk(state: GameState, result: FlowResult) -> None:
     lynch_ballot = voting.close_ballot(state, voting.LYNCH)
     tally = voting.tally_lynch(state, lynch_ballot) if lynch_ballot else None
 
-    ctx = Resolution(state, kind="dusk", slot=state.slot("dusk"), seed=seed(state, f"dusk:{day}"),
+    ctx = Resolution(state, kind="dusk", moment=state.moment("dusk"), seed=seed(state, f"dusk:{day}"),
                      title=f"Dusk of day {day}")
     ctx.flags["lynch_tally"] = tally
     target = _lynch_target(state, tally, lynch_ballot, ctx) if tally else None
@@ -389,7 +389,7 @@ def _dusk(state: GameState, result: FlowResult) -> None:
         chosen = ctx.flags.get("lynch_target")
         if ctx.flags.get("lynch_stopped") or chosen is None:
             return
-        ctx.flags["lynch_kill"] = ctx.kill(
+        ctx.flags["lynch_attack"] = ctx.attack(
             chosen, "lynch", killers=voting.voters_for(lynch_ballot, chosen), killer_role="village",
             enters_house=False, public=True)
 
@@ -406,7 +406,7 @@ def _dusk(state: GameState, result: FlowResult) -> None:
         ctx.flags["lynch_decision"] = decision.id
 
     if lynch_ballot is not None:
-        state.emit(VoteChannelPost(title=f"Lynch votes — day {day}", text=voting.published_votes(state, lynch_ballot)))
+        state.emit(VoteResults(title=f"Lynch votes — day {day}", text=voting.published_votes(state, lynch_ballot)))
         lynch_ballot.result = {"outcome": tally.outcome, "target": target, "tied": tally.tied,
                                "stopped": bool(ctx.flags.get("lynch_stopped"))}
         state.emit(Announcement(title="VOTING HAS CONCLUDED", text=_lynch_announcement(state, ctx, tally)))
@@ -442,10 +442,10 @@ def _lynch_target(state: GameState, tally: voting.Tally, ballot, ctx: Resolution
 def _lynch_announcement(state: GameState, ctx: Resolution, tally: voting.Tally) -> str:
     if ctx.flags.get("lynch_stopped"):
         return "The vote has been stopped - nobody will be lynched today."
-    kill = ctx.flags.get("lynch_kill")
-    if kill is not None:
-        victim = state.player(kill.target)
-        if kill.prevented_by:
+    attack = ctx.flags.get("lynch_attack")
+    if attack is not None:
+        victim = state.player(attack.target)
+        if attack.prevented_by:
             return f"The village chose to lynch {victim.display_name}... but they survived!"
         prefix = "There was a tie, and the Mayor's vote decided: " if ctx.flags.get("mayor_tiebreak") else ""
         faction = faction_display(victim.true_faction())
@@ -462,7 +462,7 @@ def _lynch_announcement(state: GameState, ctx: Resolution, tally: voting.Tally) 
 
 def _finish_mayor_election(state: GameState, ballot) -> None:
     tally = voting.tally_mayor(state, ballot)
-    state.emit(VoteChannelPost(title="Mayor votes", text=voting.published_votes(state, ballot)))
+    state.emit(VoteResults(title="Mayor votes", text=voting.published_votes(state, ballot)))
     if tally.outcome == "elected":
         state.mayor = tally.target
         state.emit(Announcement(title="A NEW MAYOR", text=f"**{state.name(tally.target)}** is the new Mayor!"))
@@ -494,7 +494,7 @@ def _second_lynch_end(state: GameState, result: FlowResult) -> None:
         return
     tally = voting.tally_second_lynch(state, ballot)
     counselor = state.data.get("second_lynch_by")
-    state.emit(VoteChannelPost(title=f"Second lynch votes — day {state.day}", text=voting.published_votes(state, ballot)))
+    state.emit(VoteResults(title=f"Second lynch votes — day {state.day}", text=voting.published_votes(state, ballot)))
     ballot.result = {"outcome": tally.outcome, "target": tally.target, "tied": tally.tied}
     if tally.outcome == "lynch":
         result.add("Second lynch", execute_lynch(state, tally.target, second=True, voters=voting.voters_for(ballot, tally.target)))
@@ -514,20 +514,20 @@ def _second_lynch_end(state: GameState, result: FlowResult) -> None:
 def execute_lynch(state: GameState, target: int, *, second: bool, voters: list[int] | None = None,
                   by_decision: bool = False) -> str:
     """Lynch outside the dusk resolution (tiebreak decisions, second lynch)."""
-    ctx = Resolution(state, kind="lynch", slot=f"lynch:{state.day}", seed=seed(state, f"lynch:{state.day}:{target}"),
+    ctx = Resolution(state, kind="lynch", moment=f"lynch:{state.day}", seed=seed(state, f"lynch:{state.day}:{target}"),
                      title=f"{'Second lynch' if second else 'Lynch'} of {state.name(target)}", actions=[])
     holder: dict[str, object] = {}
 
     def do() -> None:
-        holder["kill"] = ctx.kill(target, "lynch", killers=voters or [], killer_role="village",
+        holder["attack"] = ctx.attack(target, "lynch", killers=voters or [], killer_role="village",
                                   enters_house=False, public=True)
 
     ctx.commit(do, order=Resolution.EARLY)
     outcome = ctx.run()
     victim = state.player(target)
-    kill = holder["kill"]
+    attack = holder["attack"]
     how = "chosen by the Mayor" if by_decision and not second else "chosen by the Ruthless Counselor" if by_decision else "lynched"
-    if kill.prevented_by:
+    if attack.prevented_by:
         text = f"**{victim.display_name}** was {how}... but they survived!"
     else:
         text = f"**{victim.display_name}** was {how}. They were part of the **{faction_display(victim.true_faction())}**."
@@ -557,7 +557,7 @@ def preview_night(state: GameState) -> Outcome:
 
 def resolve_night(state: GameState) -> Outcome:
     night = state.day
-    ctx = Resolution(state, kind="night", slot=state.slot("night", night), seed=seed(state, f"night:{night}"),
+    ctx = Resolution(state, kind="night", moment=state.moment("night", night), seed=seed(state, f"night:{night}"),
                      title=f"Night {night}")
     return ctx.run()
 
@@ -617,9 +617,9 @@ def gm_kill(state: GameState, target: int, *, cause: str = "gm", public: bool = 
     player = state.player(target)
     if not (player.alive or player.life is LifeState.SKELETON):
         raise GameError(f"{player.display_name} is already dead.")
-    ctx = Resolution(state, kind="instant", slot="gm", seed=state.next_id("gm_seed"), title=f"GM kill: {player.display_name}",
+    ctx = Resolution(state, kind="instant", moment="gm", seed=state.next_id("gm_seed"), title=f"GM kill: {player.display_name}",
                      actions=[])
-    ctx.commit(lambda: ctx.kill(target, cause, killer_role="gm", unstoppable=True, public=public, enters_house=False),
+    ctx.commit(lambda: ctx.attack(target, cause, killer_role="gm", unstoppable=True, public=public, enters_house=False),
                order=Resolution.EARLY)
     outcome = ctx.run()
     state.log("GM", f"GM killed {player.display_name} ({cause}{', public' if public else ''})", actor=by,
@@ -633,7 +633,7 @@ def gm_revive(state: GameState, target: int, *, by: int | None = None) -> str:
         raise GameError(f"{player.display_name} is alive.")
     if player.life is not LifeState.DEAD:
         raise GameError(f"{player.display_name} can't be revived ({player.life.value}).")
-    ctx = Resolution(state, kind="instant", slot="gm", seed=state.next_id("gm_seed"), title=f"GM revive: {player.display_name}",
+    ctx = Resolution(state, kind="instant", moment="gm", seed=state.next_id("gm_seed"), title=f"GM revive: {player.display_name}",
                      actions=[])
     ctx.commit(lambda: ctx.revive(target, reason="GM"))
     outcome = ctx.run()
@@ -662,7 +662,7 @@ def remove_night_override(state: GameState, target: int, *, by: int | None = Non
 
 def replace_player(state: GameState, old_id: int, new_id: int, new_name: str, *, by: int | None = None) -> Player:
     """The Reaper puts another soul into a body: the new member takes over
-    the player's role, state, groups and channels."""
+    the player's role, state, chats and channels."""
     if new_id in state.players:
         raise GameError("That person is already playing.")
     player = state.player(old_id)
@@ -674,9 +674,9 @@ def replace_player(state: GameState, old_id: int, new_id: int, new_name: str, *,
     for actor in player.actors():
         actor.owner = new_id
     state.players[new_id] = player
-    for group in state.groups.values():
-        if old_id in group.members:
-            group.members[new_id] = group.members.pop(old_id)
+    for chat in state.chats.values():
+        if old_id in chat.members:
+            chat.members[new_id] = chat.members.pop(old_id)
     for action in state.actions:
         if action.actor == old_id:
             action.actor = new_id
@@ -696,10 +696,10 @@ def replace_player(state: GameState, old_id: int, new_id: int, new_name: str, *,
     return player
 
 
-def add_status(state: GameState, player: Player, key: str, *, source: int | None = None,
-               expires: str | None = None, **data) -> Status:
-    status = Status(key=key, source=source, expires=expires, data=data)
-    player.add_status(status)
+def add_condition(state: GameState, player: Player, key: str, *, source: int | None = None,
+               expires: str | None = None, **data) -> Condition:
+    status = Condition(key=key, source=source, expires=expires, data=data)
+    player.add_condition(status)
     return status
 
 

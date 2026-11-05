@@ -30,11 +30,11 @@ class Locksmith(Role):
         target = ctx.target_of(action)
         house = ctx.state.house_of(target)
         members = {p.user_id for p in ctx.state.house_members(house)}
-        label = ctx.state.groups[house].name if house in ctx.state.groups else ctx.state.name(target)
+        label = ctx.state.chats[house].name if house in ctx.state.chats else ctx.state.name(target)
         ctx.note("Protections", f"The house of {label} is locked")
         ctx.commit(lambda: self.locked.append(target))
         for member in members:
-            ctx.protect(member, "the house was locked", lambda kill: kill.enters_house)
+            ctx.protect(member, "the house was locked", lambda attack: attack.enters_house)
         for visit in ctx.visits:
             if visit.action_id == action.id or visit.blocked:
                 continue

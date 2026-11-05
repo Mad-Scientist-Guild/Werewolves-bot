@@ -41,10 +41,10 @@ class GameBuilder:
 
     def families(self, *members: tuple[str, ...]) -> None:
         """g.families(("a", "b"), ("c", "d")) - each tuple is one family (= one house)."""
-        from Core.state import GroupKind
+        from Core.state import ChatKind
         for index, names in enumerate(members, start=1):
             key = f"family:{index}"
-            self.state.ensure_group(key, GroupKind.FAMILY, f"family-{index}")
+            self.state.ensure_chat(key, ChatKind.FAMILY, f"family-{index}")
             for name in names:
                 flow.set_family(self.state, self.p(name), key)
 

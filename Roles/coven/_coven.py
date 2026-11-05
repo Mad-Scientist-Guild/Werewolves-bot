@@ -1,10 +1,11 @@
 """Shared Coven mechanics.
 
 Discovery: each night every Coven member can guess one other member (the Hag
-Mother three). A correct guess links the two. Coven chats follow the linked
-groups: finding ONE member of an established group joins you to that whole
-group. Groups merge as they connect - a new chat is created for the merged
-group and the old chats become read-only (nothing is ever deleted).
+Mother three). A correct guess links the two. Members linked to each other,
+directly or through others, form a *circle*, and every circle shares a chat:
+finding ONE member of an established circle joins you to the whole circle.
+Circles merge as they connect - a new chat is created for the merged circle
+and the old chats become read-only (nothing is ever deleted).
 
 The kill list (default 15 roles in the game + 3 that aren't) is generated at
 the start and shown to a member once they've found someone.
@@ -13,7 +14,7 @@ from __future__ import annotations
 
 import random
 
-from Core.effects import GroupMessage
+from Core.effects import ChatMessage
 from Core.factions import COVEN
 from Core.flow import seed
 from Roles.role import *
@@ -35,8 +36,8 @@ def links(state: GameState) -> list[list[int]]:
     return state.data.setdefault("coven_links", [])
 
 
-def group_of(state: GameState, member: int) -> set[int]:
-    """Everyone connected to this member (themselves included)."""
+def circle_of(state: GameState, member: int) -> set[int]:
+    """This member's circle: everyone linked to them, directly or not (themselves included)."""
     seen, todo = {member}, [member]
     pairs = links(state)
     while todo:
@@ -51,7 +52,7 @@ def group_of(state: GameState, member: int) -> set[int]:
 
 def known_members(state: GameState, member: int) -> set[int]:
     """Coven members this member knows (excluding themselves)."""
-    return group_of(state, member) - {member}
+    return circle_of(state, member) - {member}
 
 
 def chat_of(state: GameState, member: int) -> str | None:
@@ -61,38 +62,38 @@ def chat_of(state: GameState, member: int) -> str | None:
 def connect(ctx: Resolution, a: int, b: int) -> None:
     """Link two Coven members (commit pass) and merge their chats."""
     state = ctx.state
-    group_a, group_b = group_of(state, a), group_of(state, b)
-    if b in group_a:
+    circle_a, circle_b = circle_of(state, a), circle_of(state, b)
+    if b in circle_a:
         return
     links(state).append(sorted([a, b]))
-    merged = group_a | group_b
-    chat_a = chat_of(state, a) if len(group_a) > 1 else None
-    chat_b = chat_of(state, b) if len(group_b) > 1 else None
+    merged = circle_a | circle_b
+    chat_a = chat_of(state, a) if len(circle_a) > 1 else None
+    chat_b = chat_of(state, b) if len(circle_b) > 1 else None
     # members who had found nobody before: they get to see the kill list now
-    newcomers = [m for group in (group_a, group_b) if len(group) == 1 for m in group]
+    newcomers = [m for circle in (circle_a, circle_b) if len(circle) == 1 for m in circle]
 
     if chat_a and not chat_b:
-        key, joining = chat_a, group_b
+        key, joining = chat_a, circle_b
     elif chat_b and not chat_a:
-        key, joining = chat_b, group_a
+        key, joining = chat_b, circle_a
     else:
         number = state.next_id("coven_chat")
         key = f"coven:{number}"
-        state.ensure_group(key, GroupKind.COVEN, f"coven-{number}")
+        state.ensure_chat(key, ChatKind.COVEN, f"coven-{number}")
         joining = merged
         for old in (chat_a, chat_b):
             if old:   # superseded: stays readable for everyone who was in it
-                state.groups[old].archived = True
-    group = state.groups[key]
+                state.chats[old].archived = True
+    chat = state.chats[key]
     for member in sorted(joining):
-        group.add(member)
+        chat.add(member)
     mapping = state.data.setdefault("coven_chat_of", {})
     for member in merged:
         mapping[str(member)] = key
 
     names = ", ".join(state.name(m) for m in sorted(merged))
-    state.emit(GroupMessage(group=key, text=f"🕯️ The Coven grows: {names}"))
-    ctx.note("Conversions", f"Coven members {state.name(a)} and {state.name(b)} found each other → {group.name}: {names}")
+    state.emit(ChatMessage(chat=key, text=f"The Coven grows: {names}"))
+    ctx.note("Conversions", f"Coven members {state.name(a)} and {state.name(b)} found each other → {chat.name}: {names}")
     for member in newcomers:
         ctx.inform(member, "You now know the Coven's kill list:\n" + kill_list_text(state))
 
@@ -100,7 +101,7 @@ def connect(ctx: Resolution, a: int, b: int) -> None:
 def full_coven(state: GameState) -> bool:
     """Every living Coven member has found the others."""
     members = [p.user_id for p in state.alive_players() if p.true_faction() == COVEN]
-    return len(members) > 1 and set(members) <= group_of(state, members[0])
+    return len(members) > 1 and set(members) <= circle_of(state, members[0])
 
 
 # --- the kill list --------------------------------------------------------------------
@@ -159,7 +160,7 @@ class CovenRole(Role):
 
 
 class CovenCommands(RoleCommands, abstract=True):
-    """/find and /kill_list for every Coven role's command group."""
+    """/find and /kill_list for every Coven role's command chat."""
 
     @app_commands.command(name="find", description="Guess a fellow Coven member tonight")
     @app_commands.describe(target="Who you think is in the Coven")

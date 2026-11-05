@@ -15,7 +15,7 @@ class TurnedWolf(Modifier):
     )
     true_faction = WEREWOLVES
     can_vote_wolf_kill = True
-    groups = ("wolves",)
+    chats = ("wolves",)
 
     turned_by: int | None = None
     turned_day: int = 0

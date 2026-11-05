@@ -22,7 +22,7 @@ from typing import AsyncIterator, Callable
 from Core.errors import GameAlreadyActive, NoActiveGame
 from Core.serialize import dump
 from Core.state import GameState, Phase
-from Storage.codec import STATE_VERSION, decode, encode
+from Storage.codec import decode, encode
 from Storage.db import Database
 
 log = logging.getLogger("werewolves.games")
@@ -70,7 +70,7 @@ class GameService:
     async def load_all(self) -> list[GameHandle]:
         for row in await self.db.active_games():
             try:
-                state = decode(row.state, row.state_version)
+                state = decode(row.state)
             except Exception:
                 log.exception("Could not load game %s for guild %s", row.id, row.guild_id)
                 await self.db.add_event(guild_id=row.guild_id, game_id=row.id, category="ERROR", alert=True,
@@ -90,7 +90,7 @@ class GameService:
             raise GameAlreadyActive("A game is already running in this server.")
         from Core.flow import default_role_pool
         state = GameState(guild_id=guild_id, role_pool=default_role_pool())
-        game_id = await self.db.create_game(guild_id, encode(state), STATE_VERSION)
+        game_id = await self.db.create_game(guild_id, encode(state))
         state.game_id = game_id
         handle = GameHandle(game_id, state)
         self.handles[guild_id] = handle
@@ -122,7 +122,7 @@ class GameService:
         snap = (label, encode(before), before.phase.value, before.day) if before is not None and label else None
         await self.db.commit_game(
             game_id=handle.game_id, guild_id=handle.guild_id, status=status_of(state), phase=state.phase.value,
-            day=state.day, state_json=encode(state), version=STATE_VERSION,
+            day=state.day, state_json=encode(state),
             events=events, effects=effects, reports=reports, snapshot=snap,
         )
         state.pending_logs.clear()
@@ -133,11 +133,10 @@ class GameService:
         """Roll the game back to a snapshot. The current state is snapshotted
         first, so the rollback itself can be undone."""
         handle = self.get(guild_id)
-        found = await self.db.snapshot(handle.game_id, snapshot_id)
-        if found is None:
+        text = await self.db.snapshot(handle.game_id, snapshot_id)
+        if text is None:
             raise NoActiveGame("No such snapshot for this game.")
-        text, version = found
-        restored = decode(text, version)
+        restored = decode(text)
         restored.game_id = handle.game_id
         async with handle.lock:
             current = handle.state

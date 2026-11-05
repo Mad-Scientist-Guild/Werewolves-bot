@@ -14,7 +14,7 @@ class Skeleton(Modifier):
         "the Lich and the other skeletons. If the Lich dies, so do you - and a Skeleton never rises again."
     )
     true_faction = UNDEAD
-    public_status = PublicStatus.SKELETON
+    public_role = PublicRole.SKELETON
 
     lich: int | None = None
 
@@ -31,9 +31,9 @@ def raise_skeleton(ctx: Resolution, target: int, by: int) -> None:
     if spirit is not None and getattr(spirit, "active", False):
         spirit.move_on(ctx, "raised as a skeleton")
     add_modifier(state, player, "skeleton", reason=f"raised by {state.name(by)}", lich=by)
-    group = state.ensure_group(f"skeletons:{by}", GroupKind.SKELETONS, "skeletons")
-    group.add(by)
-    group.add(target)
+    chat = state.ensure_chat(f"skeletons:{by}", ChatKind.SKELETONS, "skeletons")
+    chat.add(by)
+    chat.add(target)
     ctx.inform(target, "💀 You rise from your grave as a **Skeleton**, serving the Lich. You can react in the village "
                        "chat again, and you share a chat with the Lich.")
     ctx.note("Conversions", f"{player.display_name} rises as a Skeleton (Lich: {state.name(by)})")

@@ -2,7 +2,7 @@
 
 Rule of simultaneity: everything that resolves at the same moment reads the
 state as it was at the start of that moment. Roles never mutate state while
-being evaluated - they emit intents (`inform`, `kill`, `commit`) that are
+being evaluated - they emit intents (`inform`, `attack`, `commit`) that are
 applied together in the commit pass. Only the explicitly modelled
 interactions (curses, locks, stalks, protections, visits) influence other
 actions within the same resolution.
@@ -36,7 +36,7 @@ from Core.state import (
 )
 
 if TYPE_CHECKING:
-    from Core.actor import Actor
+    from Core.actor import RoleBase
 
 
 @dataclass
@@ -52,7 +52,7 @@ class Visit:
 
 
 @dataclass
-class Kill:
+class Attack:
     target: int
     cause: str
     killers: list[int] = field(default_factory=list)
@@ -69,7 +69,7 @@ class Kill:
 @dataclass
 class Protection:
     label: str
-    applies: Callable[[Kill], bool]
+    applies: Callable[[Attack], bool]
 
 
 SECTIONS = (
@@ -136,19 +136,19 @@ class Resolution:
     NORMAL = 50
     LATE = 80        # after deaths (e.g. revives "after the lynch")
 
-    def __init__(self, state: GameState, *, kind: str, slot: str, seed: int, title: str,
+    def __init__(self, state: GameState, *, kind: str, moment: str, seed: int, title: str,
                  actions: Sequence[SubmittedAction] | None = None):
         self.state = state
         self.kind = kind                 # "night" | "dusk" | "instant"
-        self.slot = slot
+        self.moment = moment
         self.rng = random.Random(seed)
         self.report = Report(title)
         if actions is None:
-            actions = [a for a in state.actions if a.slot == slot and a.status is ActionStatus.PENDING]
+            actions = [a for a in state.actions if a.resolves_at == moment and a.status is ActionStatus.PENDING]
         self.actions: list[SubmittedAction] = sorted(actions, key=self._sort_key)
         self.blocked: dict[int, str] = {}
         self.visits: list[Visit] = []
-        self.kills: list[Kill] = []
+        self.attacks: list[Attack] = []
         self.protections: dict[int, list[Protection]] = {}
         self.messages: dict[int, list[str]] = {}
         self.flags: dict[str, object] = {}
@@ -170,7 +170,7 @@ class Resolution:
         actor = self.actor_for(action)
         return actor.ability(action.ability) if actor is not None else None
 
-    def actor_for(self, action: SubmittedAction) -> Actor | None:
+    def actor_for(self, action: SubmittedAction) -> RoleBase | None:
         player = self.state.find_player(action.actor)
         if player is None:
             return None
@@ -182,27 +182,27 @@ class Resolution:
         self.messages.setdefault(player_id, []).append(text)
         self.report.add("Info", f"{self.state.name(player_id)} learns: {text}")
 
-    def kill(self, target: int, cause: str, *, killers: Iterable[int] = (), killer_role: str | None = None,
+    def attack(self, target: int, cause: str, *, killers: Iterable[int] = (), killer_role: str | None = None,
              attacker_faction: str | None = None, enters_house: bool = True, unstoppable: bool = False,
-             public: bool = False, action: SubmittedAction | None = None) -> Kill:
-        kill = Kill(
+             public: bool = False, action: SubmittedAction | None = None) -> Attack:
+        attack = Attack(
             target=target, cause=cause, killers=list(killers), killer_role=killer_role,
             attacker_faction=attacker_faction, enters_house=enters_house, unstoppable=unstoppable,
             public=public, action_id=action.id if action else None,
         )
-        self.kills.append(kill)
-        return kill
+        self.attacks.append(attack)
+        return attack
 
     def commit(self, fn: Callable[[], None], *, order: int = NORMAL) -> None:
         """Run `fn` in the commit pass. All state changes go through here."""
         self._commits.append((order, len(self._commits), fn))
 
-    def protect(self, target: int, label: str, applies: Callable[[Kill], bool] | None = None, *,
+    def protect(self, target: int, label: str, applies: Callable[[Attack], bool] | None = None, *,
                 first: bool = False) -> None:
         """Register a protection for this resolution. `first` puts it before
         protections registered earlier (the Old Hunter's wolfsbane must trigger)."""
         protections = self.protections.setdefault(target, [])
-        protection = Protection(label, applies or (lambda kill: True))
+        protection = Protection(label, applies or (lambda attack: True))
         if first:
             protections.insert(0, protection)
         else:
@@ -262,14 +262,14 @@ class Resolution:
                        enters_house: bool = True) -> str | None:
         """Turning goes through the same protections as killing, with cause
         "turn" - protections decide whether they also stop turning."""
-        probe = Kill(target=target, cause="turn", killers=list(killers), attacker_faction=attacker_faction,
+        probe = Attack(target=target, cause="turn", killers=list(killers), attacker_faction=attacker_faction,
                      enters_house=enters_house)
-        reason = self.kill_prevented(probe)
+        reason = self.attack_prevented(probe)
         if reason:
             probe.prevented_by = reason
             player = self.state.find_player(target)
             for actor in (player.actors() if player else []):
-                actor.on_kill_prevented(self, probe)
+                actor.on_attack_prevented(self, probe)
         return reason
 
     def convert(self, kind: str, target: int, *, by: int) -> None:
@@ -331,8 +331,8 @@ class Resolution:
         """Deterministic random pick (seeded) from player ids."""
         return self.rng.choice(sorted(options)) if options else None
 
-    def pending_kills_on(self, target: int) -> list[Kill]:
-        return [k for k in self.kills if k.target == target and k.prevented_by is None]
+    def pending_attacks_on(self, target: int) -> list[Attack]:
+        return [k for k in self.attacks if k.target == target and k.prevented_by is None]
 
     # --- pipeline ----------------------------------------------------------
     def run(self) -> Outcome:
@@ -340,7 +340,7 @@ class Resolution:
         if self.kind == "night":
             for override in self.state.night_overrides:
                 if override.kind == "kill":
-                    self.kill(override.player, override.cause, killer_role="gm", unstoppable=True,
+                    self.attack(override.player, override.cause, killer_role="gm", unstoppable=True,
                               enters_house=False)
                     self.report.add("Notes", f"GM override: kill {self.state.name(override.player)} ({override.cause})")
                 elif override.kind == "spare":
@@ -449,13 +449,13 @@ class Resolution:
                 self._finish(action, ActionStatus.RESOLVED, action.note)
 
         self._run_commits(lambda order: order < 60)
-        self._process_kills()
+        self._process_attacks()
         self._run_commits(lambda order: order >= 60)
-        self._process_kills()
+        self._process_attacks()
 
         for player, actor in list(self.state.iter_actors()):
             actor.after_resolution(self)
-        self._process_kills()
+        self._process_attacks()
         for hook in FINAL_HOOKS:
             hook(self)
 
@@ -475,68 +475,68 @@ class Resolution:
             action.note = note
 
     # --- kills & deaths ----------------------------------------------------
-    def kill_prevented(self, kill: Kill) -> str | None:
-        target = self.state.find_player(kill.target)
+    def attack_prevented(self, attack: Attack) -> str | None:
+        target = self.state.find_player(attack.target)
         if target is None:
             return "unknown player"
-        if any(o.kind == "spare" and o.player == kill.target for o in self.state.night_overrides) and self.kind == "night":
+        if any(o.kind == "spare" and o.player == attack.target for o in self.state.night_overrides) and self.kind == "night":
             return "spared by a GM"
         if target.dead:
             return "already dead"
-        if kill.unstoppable:
+        if attack.unstoppable:
             return None
-        for protection in self.protections.get(kill.target, []):
-            if protection.applies(kill):
+        for protection in self.protections.get(attack.target, []):
+            if protection.applies(attack):
                 return protection.label
         if self.kind == "night":
-            for status in target.statuses:
+            for status in target.conditions:
                 # night protections set during the day (Priest blessing, Enchantress charm): data = {"label", "turn"}
-                if status.key == "protection" and (kill.cause != "turn" or status.data.get("turn", False)):
+                if status.key == "protection" and (attack.cause != "turn" or status.data.get("turn", False)):
                     return status.data.get("label", "protected")
         for actor in target.actors():
-            reason = actor.protects_against(self, kill)
+            reason = actor.protects_against(self, attack)
             if reason:
                 return reason
         return None
 
-    def _process_kills(self) -> None:
+    def _process_attacks(self) -> None:
         while True:
-            pending = [k for k in self.kills if not k.processed]
+            pending = [k for k in self.attacks if not k.processed]
             if not pending:
                 return
-            for kill in pending:
-                kill.processed = True
-                if kill.prevented_by is None:
-                    kill.prevented_by = self.kill_prevented(kill)
-                who = self.state.name(kill.target)
-                by = f" by {kill.killer_role}" if kill.killer_role else ""
-                if kill.prevented_by:
-                    self.report.add("Kills", f"{who} attacked ({kill.cause}{by}) - survived: {kill.prevented_by}")
-                    target = self.state.find_player(kill.target)
-                    if target is not None and kill.prevented_by != "already dead":
+            for attack in pending:
+                attack.processed = True
+                if attack.prevented_by is None:
+                    attack.prevented_by = self.attack_prevented(attack)
+                who = self.state.name(attack.target)
+                by = f" by {attack.killer_role}" if attack.killer_role else ""
+                if attack.prevented_by:
+                    self.report.add("Kills", f"{who} attacked ({attack.cause}{by}) - survived: {attack.prevented_by}")
+                    target = self.state.find_player(attack.target)
+                    if target is not None and attack.prevented_by != "already dead":
                         for actor in target.actors():
-                            actor.on_kill_prevented(self, kill)
+                            actor.on_attack_prevented(self, attack)
                     continue
-                self.report.add("Kills", f"{who} attacked ({kill.cause}{by}) - dies")
+                self.report.add("Kills", f"{who} attacked ({attack.cause}{by}) - dies")
                 for _, actor in list(self.state.iter_actors()):
-                    actor.on_other_killed(self, kill)
-                self.apply_death(kill)
+                    actor.on_other_killed(self, attack)
+                self.apply_death(attack)
 
-    def apply_death(self, kill: Kill) -> None:
-        player = self.state.player(kill.target)
+    def apply_death(self, attack: Attack) -> None:
+        player = self.state.player(attack.target)
         if player.dead:
             return
         player.life = LifeState.PERMA_DEAD if player.life is LifeState.SKELETON else LifeState.DEAD
         record = DeathRecord(
-            day=self.state.day, phase=self.kind, cause=kill.cause,
-            killer_ids=list(kill.killers), killer_role=kill.killer_role, public=kill.public,
+            day=self.state.day, phase=self.kind, cause=attack.cause,
+            killer_ids=list(attack.killers), killer_role=attack.killer_role, public=attack.public,
         )
         player.deaths.append(record)
-        if kill.public:
-            from Core.access import due_public_status
-            player.public_status = due_public_status(player)
+        if attack.public:
+            from Core.access import due_public_role
+            player.public_role = due_public_role(player)
         self.deaths.append((player, record))
-        self.report.add("Deaths", f"{player.display_name} ({player.role_name}) - {kill.cause}")
+        self.report.add("Deaths", f"{player.display_name} ({player.role_name}) - {attack.cause}")
 
         if self.state.mayor == player.user_id:
             self._succeed_mayor(player)
@@ -571,10 +571,10 @@ class Resolution:
         # e.g. a wolf whose role was taken over by the Apprentice comes back without abilities
         for actor in list(player.actors()):
             actor.on_revived(self)
-        replacement = player.status("becomes_on_revive")
+        replacement = player.condition("becomes_on_revive")
         if replacement is not None:
             from Core.flow import set_role
-            player.remove_status("becomes_on_revive")
+            player.remove_condition("becomes_on_revive")
             set_role(self.state, player, replacement.data["role"], keep_faction=True,
                      reason=replacement.data.get("reason", "revived"))
 
@@ -590,7 +590,7 @@ def describe_action(state: GameState, action: SubmittedAction) -> str:
     return f"{action.source}.{action.ability}({', '.join(parts)}){gm}"
 
 
-def run_resolution(state: GameState, *, kind: str, slot: str, seed: int, title: str,
+def run_resolution(state: GameState, *, kind: str, moment: str, seed: int, title: str,
                    actions: Sequence[SubmittedAction] | None = None) -> Outcome:
-    return Resolution(state, kind=kind, slot=slot, seed=seed, title=title, actions=actions).run()
+    return Resolution(state, kind=kind, moment=moment, seed=seed, title=title, actions=actions).run()
 

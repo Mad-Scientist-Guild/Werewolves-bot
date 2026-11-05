@@ -7,7 +7,7 @@ class AncientWolf(Role):
     name = "ancient_wolf"
     display = "Ancient wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "Once per game you can spare the werewolves' victim and turn them into a werewolf instead: they join the "
@@ -30,9 +30,9 @@ class AncientWolf(Role):
             return
         # the pack doesn't attack; the Ancient wolf goes alone
         ctx.visits[:] = [v for v in ctx.visits if not v.pack]
-        kill = ctx.flags.get("pack_kill")
-        if kill is not None:
-            kill.prevented_by = "turned instead of eaten (Ancient wolf)"
+        attack = ctx.flags.get("pack_attack")
+        if attack is not None:
+            attack.prevented_by = "turned instead of eaten (Ancient wolf)"
         ctx.redirect(action, target, reason="the werewolves' victim")
         ctx.flags["pack_turned_by"] = self.owner
 

@@ -13,7 +13,7 @@ from Core.abilities import Ability, P, Param, ParamKind, Priority, Timing
 from Core.actor import (
     MODIFIER_REGISTRY,
     ROLE_REGISTRY,
-    Actor,
+    RoleBase,
     Modifier,
     Role,
     register_modifier,
@@ -25,24 +25,24 @@ from Core.factions import COVEN, EVIL_FACTIONS, LOVERS, NO_FACTION, UNDEAD, VILL
 from Core.flow import (
     add_modifier,
     adopt_role,
-    add_status,
+    add_condition,
     family_members,
-    join_group,
-    register_group,
+    join_chat,
+    register_chat,
     remove_modifier,
     seed,
     set_role,
 )
-from Core.resolution import CONVERSIONS, Kill, Resolution, Visit, register_conversion
+from Core.resolution import CONVERSIONS, Attack, Resolution, Visit, register_conversion
 from Core.state import (
     DeathRecord,
     GameState,
-    GroupKind,
+    ChatKind,
     LifeState,
     Phase,
     Player,
-    PublicStatus,
-    Status,
+    PublicRole,
+    Condition,
     SubmittedAction,
 )
 from Services.role_commands import RoleCommands, role_autocomplete
@@ -50,11 +50,11 @@ from Services.role_commands import RoleCommands, role_autocomplete
 __all__ = [
     "field", "discord", "app_commands",
     "Ability", "P", "Param", "ParamKind", "Priority", "Timing",
-    "MODIFIER_REGISTRY", "ROLE_REGISTRY", "Actor", "Modifier", "Role", "register_modifier", "register_role",
+    "MODIFIER_REGISTRY", "ROLE_REGISTRY", "RoleBase", "Modifier", "Role", "register_modifier", "register_role",
     "GameError", "PrivateMessage", "RoleCard",
     "COVEN", "EVIL_FACTIONS", "LOVERS", "NO_FACTION", "UNDEAD", "VILLAGERS", "WEREWOLVES", "faction_display",
-    "add_modifier", "adopt_role", "add_status", "family_members", "join_group", "register_group", "remove_modifier", "seed", "set_role",
-    "CONVERSIONS", "Kill", "Resolution", "Visit", "register_conversion",
-    "DeathRecord", "GameState", "GroupKind", "LifeState", "Phase", "Player", "PublicStatus", "Status", "SubmittedAction",
+    "add_modifier", "adopt_role", "add_condition", "family_members", "join_chat", "register_chat", "remove_modifier", "seed", "set_role",
+    "CONVERSIONS", "Attack", "Resolution", "Visit", "register_conversion",
+    "DeathRecord", "GameState", "ChatKind", "LifeState", "Phase", "Player", "PublicRole", "Condition", "SubmittedAction",
     "RoleCommands", "role_autocomplete",
 ]

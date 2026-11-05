@@ -25,14 +25,14 @@ class Vigilante(Role):
     def resolve_shoot(self, ctx: Resolution, action: SubmittedAction) -> None:
         target = ctx.target_of(action)
         innocent = ctx.apparent_faction(target, self.name) == VILLAGERS   # judged before anything changes tonight
-        kill = ctx.kill(target, "vigilante", killers=[self.owner], killer_role=self.name,
+        attack = ctx.attack(target, "vigilante", killers=[self.owner], killer_role=self.name,
                         attacker_faction=VILLAGERS, action=action)
         if not innocent:
             return
 
         def guilt() -> None:
-            if kill.processed and kill.prevented_by is None:
-                ctx.kill(self.owner, "guilt", killers=[self.owner], killer_role=self.name, enters_house=False)
+            if attack.processed and attack.prevented_by is None:
+                ctx.attack(self.owner, "guilt", killers=[self.owner], killer_role=self.name, enters_house=False)
 
         ctx.commit(guilt, order=Resolution.LATE)
 

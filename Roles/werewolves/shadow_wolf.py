@@ -6,7 +6,7 @@ class ShadowWolf(Role):
     name = "shadow_wolf"
     display = "Shadow wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "Once a night you can stalk a player. If they leave their house, you are waiting for them: they're forced "
@@ -41,7 +41,7 @@ class ShadowWolf(Role):
             if actor is not None and actor.defeats_stalkers(ctx.state, other):
                 victim = ctx.state.player(target)
                 ctx.note("Kills", f"The Shadow wolf stalked {victim.display_name}, who was armed ({actor.name})")
-                ctx.kill(self.owner, "stalked an armed player", killers=[target], killer_role=actor.name,
+                ctx.attack(self.owner, "stalked an armed player", killers=[target], killer_role=actor.name,
                          attacker_faction=victim.true_faction(), enters_house=False)
             else:
                 ctx.block(other, "forced back by the Shadow wolf")

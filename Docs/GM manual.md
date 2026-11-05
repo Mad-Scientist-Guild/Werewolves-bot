@@ -120,7 +120,7 @@ chooser's private channel and alerts you. If someone doesn't answer, choose for 
   - `/gm set_role`
   - `/gm modifier add|remove`
   - `/gm set_faction`
-  - `/gm group add|remove`
+  - `/gm chat add|remove`
   - `/gm mayor set|open|close`
   - `/gm lockdown`
 - **Testing in a dev server:** `/gm clock advance` runs the next transition immediately, so you can play a whole
@@ -145,7 +145,7 @@ The Reaper then has two options:
   - a Vigilante, or a Monster Hunter armed with silver, kills the wolf;
   - a correct guess on a protected player ends the spree;
   - the Actor can always be guessed as "Actor".
-- **Adopted Child:** add them to their second family with `/gm group add <player> family:<n>` and tell that
+- **Adopted Child:** add them to their second family with `/gm chat add <player> family:<n>` and tell that
   family.
 - **Gambler:** whether protection can save them from a tragic death isn't decided. The bot lets protection apply
   and alerts you whenever it did.

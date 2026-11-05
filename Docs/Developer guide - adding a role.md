@@ -23,7 +23,7 @@ This guide explains how to add (or change) a role. For how the pieces underneath
 
 A role is **one file** in `Roles/<faction>/<role_name>.py`. Every module under `Roles/` is imported automatically
 at startup (`Roles/__init__.py`), so there is nothing to register anywhere else. To remove a role, delete its
-file. A running game that still has that role keeps its data (see `MissingActor` in the architecture guide).
+file (between games: a saved game that still contains the role can't be loaded without it).
 
 A role file has two parts:
 
@@ -140,7 +140,7 @@ Ability(
 | `P.choice(name, ("a", "b"), desc)` | lower-case choice | one of the choices |
 | `P.text(name, desc, max_words=20)` | text | word limit |
 | `P.time(...)` | `"HH:MM"` | valid time |
-| `P.family(...)` | group key | is a family |
+| `P.family(...)` | chat key | is a family |
 
 Every param can be `required=False`. Player params end up in `action.targets`, in declaration order, and every
 param is in `action.params`.
@@ -195,7 +195,7 @@ flowchart TD
 ```
 
 **The simultaneity rule.** Everything resolving at the same moment reads the state *as it was at the start* of
-that moment. During evaluation (`resolve_*`) you only read. You produce intents with `ctx.inform`, `ctx.kill` and
+that moment. During evaluation (`resolve_*`) you only read. You produce intents with `ctx.inform`, `ctx.attack` and
 `ctx.commit`. That's why a Seer still sees "Villagers" for someone the Ancient wolf turns the same night. The only
 interactions that affect other actions in the same resolution are the explicitly modelled ones: curses, locks,
 stalks, protections and visits. Those happen in the interaction pass.
@@ -216,7 +216,7 @@ runs again for real with the same seed, so the outcome matches the preview unles
 
 ## 5. Hook reference
 
-Every role and modifier is an `Actor` ([Core/actor.py](../Core/actor.py)). Override only what you need; every hook
+Every role and modifier derives from `RoleBase` ([Core/actor.py](../Core/actor.py)). Override only what you need; every hook
 is synchronous and must not touch Discord.
 
 | Hook | Called | On | Typical use |
@@ -227,7 +227,7 @@ is synchronous and must not touch Discord.
 | `resolve_<ability>(ctx, action)` | evaluation pass | the owner's action | info, kills, conversions |
 | `on_visited(ctx, visit)` | after movement | the visited player's actors | react to visitors |
 | `protects_against(ctx, kill)` → reason | every kill check | the target's actors | Cupid vs lynch, Lich "only by lynch" |
-| `on_kill_prevented(ctx, kill)` | a kill or turn on the owner was stopped | the target's actors | Old Hunter's wolfsbane |
+| `on_attack_prevented(ctx, kill)` | a kill or turn on the owner was stopped | the target's actors | Old Hunter's wolfsbane |
 | `on_other_killed(ctx, kill)` | a kill is confirmed, just before the death | **every** actor | collateral (the Village Slut), counting kills (Spawn) |
 | `on_death(ctx, record)` | the owner died | the dead player's actors | Lich takes the skeletons along, lover → Vengeful Spirit |
 | `on_other_death(ctx, dead)` | someone else died | **every** actor | heartbreak, Apprentice offer, Cupid → villagers |
@@ -254,7 +254,7 @@ for actors of *dead* players.
 | Member | Gives |
 |---|---|
 | `ctx.state` | the `GameState` (read in `resolve_*`; change only in commits) |
-| `ctx.kind` / `ctx.slot` | `"night"`, `"dusk"`, `"instant"`, `"lynch"` / e.g. `"night:3"` |
+| `ctx.kind` / `ctx.moment` | `"night"`, `"dusk"`, `"instant"`, `"lynch"` / e.g. `"night:3"` |
 | `ctx.target_of(action, param="target")` | the (possibly redirected) target |
 | `ctx.apparent_faction(pid, observer)` / `ctx.apparent_role(...)` | what an investigation sees |
 | `ctx.visitors_of(pid)` | visits that reached that player (not blocked) |
@@ -268,8 +268,8 @@ for actors of *dead* players.
 | Member | Does |
 |---|---|
 | `ctx.inform(pid, text)` | private message, delivered when the resolution is applied |
-| `ctx.kill(target, cause, killers=, killer_role=, attacker_faction=, enters_house=True, unstoppable=False, public=False, action=)` | queue a kill; returns the `Kill` (check `kill.prevented_by` in a LATE commit) |
-| `ctx.protect(target, label, applies=lambda kill: ..., first=False)` | register a protection (interaction pass) |
+| `ctx.attack(target, cause, killers=, killer_role=, attacker_faction=, enters_house=True, unstoppable=False, public=False, action=)` | queue a kill; returns the `Attack` (check `attack.prevented_by` in a LATE commit) |
+| `ctx.protect(target, label, applies=lambda attack: ..., first=False)` | register a protection (interaction pass) |
 | `ctx.block(action, reason)` | stop an action (and its visit) |
 | `ctx.redirect(action, new_target, reason=)` | change an action's target |
 | `ctx.commit(fn, order=Resolution.EARLY / NORMAL / LATE)` | run `fn` in the commit pass; LATE runs after deaths |
@@ -280,7 +280,7 @@ for actors of *dead* players.
 | `ctx.note(section, text)` / `ctx.newspaper(text)` | lines in the GM report / newspaper notes |
 | `ctx.revive(pid, reason=)` | revive (in a commit) |
 
-**`Kill` fields that matter for interactions:**
+**`Attack` fields that matter for interactions:**
 - `enters_house`: locks and "not home" apply. Heartbreak, guilt and GM kills don't enter.
 - `unstoppable`: ignores all protections (heartbreak, GM kills).
 - `attacker_faction`: e.g. the Silver Angel only stops evil attackers.
@@ -295,17 +295,17 @@ for actors of *dead* players.
 | `set_role(state, player, name, keep_faction=, note=, reason=)` | `Core/flow.py` | give a fresh role (Grave Robber) — emits a role card |
 | `adopt_role(state, player, role, reason=, note=)` | `Core/flow.py` | give a *copy* of a role instance, charges included (Apprentice) |
 | `add_modifier(state, player, name, reason=, **fields)` / `remove_modifier(...)` | `Core/flow.py` | stackable additions (Lover, Turned wolf) |
-| `add_status(state, player, key, source=, expires="morning:5", **data)` | `Core/flow.py` | temporary markers. Key `"protection"` with `label=`, `turn=` is a night protection checked automatically (Priest, Enchantress). |
-| `join_group(state, player, key)` / `register_group(key, kind, channel_name)` | `Core/flow.py` | shared chats; or declare `groups = ("wolves",)` on the class |
-| `state.ensure_group(key, kind, name)` | `Core/state.py` | a chat made during the game (the channel is created automatically) |
+| `add_condition(state, player, key, source=, expires="morning:5", **data)` | `Core/flow.py` | temporary markers. Key `"protection"` with `label=`, `turn=` is a night protection checked automatically (Priest, Enchantress). |
+| `join_chat(state, player, key)` / `register_chat(key, kind, channel_name)` | `Core/flow.py` | shared chats; or declare `chats = ("wolves",)` on the class |
+| `state.ensure_chat(key, kind, name)` | `Core/state.py` | a chat made during the game (the channel is created automatically) |
 | `state.house_of(pid)` / `state.house_members(house)` / `state.housemates(pid)` | `Core/state.py` | a house is a family |
 | `state.player(pid)`, `state.name(pid)`, `state.alive_players()`, `state.players_with_role(name)` | `Core/state.py` | lookups |
 | `seed(state, key)` | `Core/flow.py` | a stored seed for one-off randomness (Normal wolf hint) |
-| `PrivateMessage`, `RoleCard`, `GroupMessage`, `Announcement` (`state.emit(...)`) | `Core/effects.py` | messages outside `ctx.inform` |
+| `PrivateMessage`, `RoleCard`, `ChatMessage`, `Announcement` (`state.emit(...)`) | `Core/effects.py` | messages outside `ctx.inform` |
 | `register_conversion(kind, fn)` / `CONVERSIONS` | `Core/resolution.py` | define a conversion (`werewolf`, `vampire`, `skeleton`, `changeling`) |
 | `register_prepare_hook(fn)` / `register_final_hook(fn)` | `Core/resolution.py` | game-wide rules (wolf pack, first-death spirits) |
 | `flow.create_decision(...)` + `flow.DECISION_HANDLERS[kind] = fn` | `Core/flow.py` | ask a player (or the GMs) to choose via a menu |
-| `realtime.schedule_relay`, `open_seance`, `ask_player`, `send_telepathy` | `Core/realtime.py` | eavesdropping, yes/no questions, anonymous messages |
+| `realtime.schedule_eavesdrop`, `ask_the_dead`, `ask_player`, `send_telepath_message` | `Core/realtime.py` | eavesdropping, yes/no questions, anonymous messages |
 | `self.player(state)`, `self.setting(state, key, default)`, `self.uses_left(...)` | `Core/actor.py` | on every actor |
 
 Shared code for several roles goes in an underscore module, e.g. `Roles/werewolves/_pack.py` or
@@ -317,12 +317,12 @@ Shared code for several roles goes in an underscore module, e.g. `Roles/werewolv
 
 ```mermaid
 classDiagram
-    class Actor {
+    class RoleBase {
         owner
-        uses
+        uses_spent
         last_used
         abilities
-        groups
+        chats
         hooks...()
     }
     class Role {
@@ -332,12 +332,12 @@ classDiagram
     }
     class Modifier {
         true_faction
-        public_status
+        public_role
         blocks_dead_chat
         faction_override(player)
     }
-    Actor <|-- Role
-    Actor <|-- Modifier
+    RoleBase <|-- Role
+    RoleBase <|-- Modifier
     Role <|-- Seer
     Role <|-- AncientWolf
     Modifier <|-- TurnedWolf
@@ -349,7 +349,7 @@ classDiagram
 - Use a modifier for something **acquired and stackable** that should keep the role working: Turned wolf,
   Vampire Spawn, Lover, Skeleton, Changeling, Vengeful Spirit. Register it with `@register_modifier`.
 - `true_faction` (or `faction_override(player)`) changes the player's faction; the most recently added override
-  wins. `public_status` gives a public Discord role. `blocks_dead_chat` keeps a dead player out of the dead chat.
+  wins. `public_role` gives a public Discord role. `blocks_dead_chat` keeps a dead player out of the dead chat.
 - Modifiers can have abilities and commands too (the Vengeful Spirit's `/vengeful_spirit avenge`).
 
 ---

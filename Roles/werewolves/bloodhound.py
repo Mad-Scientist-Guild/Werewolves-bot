@@ -6,7 +6,7 @@ class Bloodhound(Role):
     name = "bloodhound"
     display = "Bloodhound"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "Once a night you can follow one person's scent: you'll learn whether they left their house that night "

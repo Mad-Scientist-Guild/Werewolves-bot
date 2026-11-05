@@ -31,7 +31,6 @@ SCHEMA = [
         phase TEXT,
         day INTEGER,
         state TEXT NOT NULL,
-        state_version INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS games_guild ON games(guild_id, status)",
@@ -42,7 +41,6 @@ SCHEMA = [
         day INTEGER,
         phase TEXT,
         state TEXT NOT NULL,
-        state_version INTEGER NOT NULL,
         created_at TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS reports(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +90,6 @@ class GameRow:
     guild_id: int
     status: str
     state: str
-    state_version: int
 
 
 @dataclass
@@ -151,33 +148,33 @@ class Database:
         return self.conn
 
     # --- games ---------------------------------------------------------------
-    async def create_game(self, guild_id: int, state_json: str, version: int) -> int:
+    async def create_game(self, guild_id: int, state_json: str) -> int:
         async with self.write_lock:
-            return await self._create_game(guild_id, state_json, version)
+            return await self._create_game(guild_id, state_json)
 
-    async def _create_game(self, guild_id: int, state_json: str, version: int) -> int:
+    async def _create_game(self, guild_id: int, state_json: str) -> int:
         now = utcnow()
         cursor = await self.db.execute(
-            "INSERT INTO games(guild_id, status, phase, day, state, state_version, created_at, updated_at) "
-            "VALUES (?, 'setup', 'setup', 0, ?, ?, ?, ?)",
-            (guild_id, state_json, version, now, now),
+            "INSERT INTO games(guild_id, status, phase, day, state, created_at, updated_at) "
+            "VALUES (?, 'setup', 'setup', 0, ?, ?, ?)",
+            (guild_id, state_json, now, now),
         )
         await self.db.commit()
         return int(cursor.lastrowid)
 
     async def active_games(self) -> list[GameRow]:
         async with self.db.execute(
-            "SELECT id, guild_id, status, state, state_version FROM games ORDER BY id"
+            "SELECT id, guild_id, status, state FROM games ORDER BY id"
         ) as cursor:
             rows = await cursor.fetchall()
-        return [GameRow(r["id"], r["guild_id"], r["status"], r["state"], r["state_version"]) for r in rows]
+        return [GameRow(r["id"], r["guild_id"], r["status"], r["state"]) for r in rows]
 
     async def commit_game(self, **kwargs: Any) -> None:
         async with self.write_lock:
             return await self._commit_game(**kwargs)
 
     async def _commit_game(
-        self, *, game_id: int, guild_id: int, status: str, phase: str, day: int, state_json: str, version: int,
+        self, *, game_id: int, guild_id: int, status: str, phase: str, day: int, state_json: str,
         events: Iterable[dict[str, Any]] = (), effects: Iterable[str] = (), reports: Iterable[tuple[str, str]] = (),
         snapshot: tuple[str, str, str, int] | None = None,
     ) -> None:
@@ -190,13 +187,13 @@ class Database:
             if snapshot is not None:
                 label, snap_json, snap_phase, snap_day = snapshot
                 await db.execute(
-                    "INSERT INTO snapshots(game_id, label, day, phase, state, state_version, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (game_id, label, snap_day, snap_phase, snap_json, version, now),
+                    "INSERT INTO snapshots(game_id, label, day, phase, state, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (game_id, label, snap_day, snap_phase, snap_json, now),
                 )
             await db.execute(
-                "UPDATE games SET status=?, phase=?, day=?, state=?, state_version=?, updated_at=? WHERE id=?",
-                (status, phase, day, state_json, version, now, game_id),
+                "UPDATE games SET status=?, phase=?, day=?, state=?, updated_at=? WHERE id=?",
+                (status, phase, day, state_json, now, game_id),
             )
             for event in events:
                 await db.execute(
@@ -354,9 +351,9 @@ class Database:
             rows = await cursor.fetchall()
         return [(r["id"], r["label"], r["created_at"]) for r in rows]
 
-    async def snapshot(self, game_id: int, snapshot_id: int) -> tuple[str, int] | None:
+    async def snapshot(self, game_id: int, snapshot_id: int) -> str | None:
         async with self.db.execute(
-            "SELECT state, state_version FROM snapshots WHERE game_id = ? AND id = ?", (game_id, snapshot_id)
+            "SELECT state FROM snapshots WHERE game_id = ? AND id = ?", (game_id, snapshot_id)
         ) as cursor:
             row = await cursor.fetchone()
-        return (row["state"], row["state_version"]) if row else None
+        return row["state"] if row else None

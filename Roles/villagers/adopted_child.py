@@ -4,7 +4,7 @@ from Roles.role import *
 # a house is a family, but the Adopted Child belongs to two families - it isn't decided yet how
 # that works for houses (Locksmith locks, Priest blessings, the Insomniac, the Diviner, visits...).
 # Until then the GMs add the Adopted Child to their second family's chat by hand:
-#   /gm group add <player> family:<n>
+#   /gm chat add <player> family:<n>
 # and tell that family who the Adopted Child is.
 
 

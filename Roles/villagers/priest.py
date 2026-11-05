@@ -23,14 +23,14 @@ class Priest(Role):
         member = action.params["member"]
         house = ctx.state.house_of(member)
         family = ctx.state.house_members(house)
-        label = ctx.state.groups[house].name if house in ctx.state.groups else ctx.state.name(member)
+        label = ctx.state.chats[house].name if house in ctx.state.chats else ctx.state.name(member)
         expires = f"morning:{ctx.state.day + 1}"
         ctx.inform(self.owner, f"You blessed the family of **{ctx.state.name(member)}** for the coming night.")
         ctx.note("Protections", f"The Priest blesses {label}: {', '.join(p.display_name for p in family)}")
 
         def bless() -> None:
             for player in family:
-                add_status(ctx.state, player, "protection", source=self.owner, expires=expires,
+                add_condition(ctx.state, player, "protection", source=self.owner, expires=expires,
                            label="blessed by the Priest", turn=False)
 
         ctx.commit(bless)

@@ -30,7 +30,7 @@ class PeekingGirl(Role):
         return realtime.next_occurrence(state, action.params["start"], datetime.fromisoformat(action.submitted_at))
 
     def validate(self, state: GameState, action: SubmittedAction) -> None:
-        if "wolves" not in state.groups:
+        if "wolves" not in state.chats:
             raise GameError("There's no werewolf chat to listen in on.")
         start = self._start(state, action)
         if start.date().isoformat() in self.peeked_dates:
@@ -42,7 +42,7 @@ class PeekingGirl(Role):
         end = start + timedelta(minutes=realtime.WINDOW_MINUTES)
 
         def commit() -> None:
-            realtime.schedule_relay(ctx.state, self.owner, "wolves", start, purpose="peeking_girl", now=now)
+            realtime.schedule_eavesdrop(ctx.state, self.owner, "wolves", start, purpose="peeking_girl", now=now)
             self.peeked_dates.append(start.date().isoformat())
 
         ctx.commit(commit)
@@ -56,9 +56,9 @@ def spying_leaves_the_house(ctx: Resolution) -> None:
     even when the window is during the day."""
     if ctx.kind != "night":
         return
-    for relay in realtime.relays_for_night(ctx.state, ctx.state.day):
-        if relay.purpose == "peeking_girl":
-            ctx.visits.append(Visit(visitor=relay.listener, target=None, action_id=None, source="peeking_girl",
+    for eavesdrop in realtime.eavesdrops_for_night(ctx.state, ctx.state.day):
+        if eavesdrop.purpose == "peeking_girl":
+            ctx.visits.append(Visit(visitor=eavesdrop.listener, target=None, action_id=None, source="peeking_girl",
                                     ability="peek"))
 
 

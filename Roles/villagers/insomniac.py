@@ -24,17 +24,17 @@ class Insomniac(Role):
     def resolve_listen(self, ctx: Resolution, action: SubmittedAction) -> None:
         mode = action.params["mode"]
         me = self.player(ctx.state)
-        ctx.commit(lambda: add_status(ctx.state, me, "insomniac", source=self.owner,
+        ctx.commit(lambda: add_condition(ctx.state, me, "insomniac", source=self.owner,
                                       expires=f"morning:{ctx.state.day + 1}", mode=mode))
 
     def after_resolution(self, ctx: Resolution) -> None:
         if ctx.kind != "night":
             return
-        status = self.player(ctx.state).status("insomniac")
-        if status is None:
+        condition = self.player(ctx.state).condition("insomniac")
+        if condition is None:
             return
         family = {p.user_id for p in ctx.state.housemates(self.owner)}
-        if status.data.get("mode") == "leaving":
+        if condition.data.get("mode") == "leaving":
             count = len({v.visitor for v in ctx.visits if v.visitor in family and v.visitor != self.owner})
             ctx.inform(self.owner, f"You lay awake all night: **{count}** of your family members left the house.")
             return

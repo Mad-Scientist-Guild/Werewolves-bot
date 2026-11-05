@@ -53,7 +53,7 @@ class RoleCommands(commands.GroupCog):
         async with runtime.games.mutate(interaction.guild_id) as state:
             action = actions.submit(state, interaction.user.id, ability, clean, now=now_in(state),
                                     source=self.source or None)
-            if state.phase is Phase.SLEEP and action.slot == state.slot("night"):
+            if state.phase is Phase.SLEEP and action.resolves_at == state.moment("night"):
                 refresh_preview(state, f"{state.name(action.actor)} submitted during sleep time")
             text = confirmation(state, action)
         await reply(interaction, text)
@@ -76,9 +76,9 @@ def _plain(value: Any) -> Any:
 def confirmation(state: GameState, action: SubmittedAction) -> str:
     what = describe_action(state, action)
     schedule = state.settings.schedule
-    if action.slot == "instant":
+    if action.resolves_at == "instant":
         return f"✅ Done: {what}"
-    if action.slot.startswith("dusk"):
+    if action.resolves_at.startswith("dusk"):
         when = f"This takes effect at {schedule.dusk}. You can change it until then."
     elif state.phase is Phase.SLEEP:
         when = f"It's sleep time - this resolves at {schedule.morning}."

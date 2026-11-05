@@ -8,7 +8,7 @@ from Core.actor import MODIFIER_REGISTRY, ROLE_REGISTRY
 from Core.clock import TransitionKind, next_transition
 from Core.effects import Announcement, DecisionPrompt
 from Core.errors import GameError
-from Core.state import ActionStatus, GroupKind, LifeState, Phase, PublicStatus
+from Core.state import ActionStatus, ChatKind, LifeState, Phase, PublicRole
 from Storage.codec import decode, encode
 from tests.builder import TZ, GameBuilder
 
@@ -36,15 +36,6 @@ def test_every_role_and_modifier_round_trips():
     assert encode(restored) == text
     assert restored.players[first.user_id].modifiers[0].name == sorted(MODIFIER_REGISTRY)[0]
     assert type(restored.players[first.user_id].role).__name__ == "Villager"
-
-
-def test_unknown_role_survives_as_missing_actor():
-    g = basic_game()
-    data = encode(g.state).replace('"__type__":"cultist"', '"__type__":"deleted_role"')
-    restored = decode(data)
-    role = restored.player(g.id("cult")).role
-    assert role.name == "_missing" and role.missing_name == "deleted_role"
-    assert '"__type__":"deleted_role"' in encode(restored)  # nothing lost when saved again
 
 
 # --- wolf pack ----------------------------------------------------------------
@@ -114,7 +105,7 @@ def test_ancient_wolf_turns_the_victim_instead():
     assert victim.alive
     assert victim.has_modifier("turned_wolf") and victim.true_faction() == "werewolves"
     assert victim.can_vote_wolf_kill()
-    assert g.state.groups["wolves"].members[victim.user_id].value == "active"
+    assert g.state.chats["wolves"].members[victim.user_id].value == "active"
     # only the ancient wolf left the house
     assert "w1 visits" not in g.last_report()
 
@@ -127,7 +118,7 @@ def test_failed_turn_keeps_the_ability():
     g.act("w3", "turn")
     g.night()
     assert g.alive("v1") and not g.p("v1").has_modifier("turned_wolf")
-    assert g.p("w3").role.uses.get("turn", 0) == 0
+    assert g.p("w3").role.uses_spent.get("turn", 0) == 0
 
 
 def test_preview_matches_final_and_changes_nothing():
@@ -225,7 +216,7 @@ def test_lynch_majority_kills_and_reveals_faction():
     g.dusk()
     v1 = g.p("v1")
     assert v1.dead and v1.death.public
-    assert v1.public_status is PublicStatus.DEAD    # lynch is public right away
+    assert v1.public_role is PublicRole.DEAD    # lynch is public right away
     texts = [e.text for e in g.state.pending_effects if isinstance(e, Announcement)]
     assert any("lynched **v1**" in t and "Villagers" in t for t in texts)
 
@@ -292,45 +283,45 @@ def test_second_lynch_counselor_picks_on_tie():
     assert not g.alive("v2") and not g.state.lockdown
 
 
-# --- quiet deaths & public statuses ---------------------------------------------------
+# --- quiet deaths & public roles ------------------------------------------------------
 
 def test_night_death_is_quiet_until_the_newspaper():
     g = basic_game()
     g.state.data["first_death_seen"] = True   # not the first death (that one becomes a Vengeful Spirit)
     g.dusk(); g.wolf_vote("w1", "v1"); g.wolf_vote("w2", "v1"); g.night()
     v1 = g.p("v1")
-    assert v1.dead and v1.public_status is PublicStatus.NONE
-    dead_chat = g.state.groups["dead"]
+    assert v1.dead and v1.public_role is PublicRole.NONE
+    dead_chat = g.state.chats["dead"]
     assert player_access(g.state, dead_chat, v1) is Access.WRITE
-    assert player_access(g.state, g.state.groups["village"], v1) is Access.READ
+    assert player_access(g.state, g.state.chats["village"], v1) is Access.READ
     g.newspaper()
-    assert v1.public_status is PublicStatus.DEAD
+    assert v1.public_role is PublicRole.DEAD
 
 
 def test_access_rules():
     g = basic_game()
     state = g.state
-    wolves = state.groups["wolves"]
+    wolves = state.chats["wolves"]
     w1, v1, cult = g.p("w1"), g.p("v1"), g.p("cult")
     assert player_access(state, wolves, w1) is Access.WRITE
     assert player_access(state, wolves, cult) is Access.WRITE
     assert player_access(state, wolves, v1) is Access.NONE
     wolves.leave(w1.user_id)
     assert player_access(state, wolves, w1) is Access.READ      # never made inaccessible
-    private = state.groups[w1.private_group]
+    private = state.chats[w1.private_chat]
     w1.life = LifeState.DEAD
     assert player_access(state, private, w1) is Access.WRITE    # can always talk to the GMs
     state.lockdown = True
-    assert player_access(state, state.groups["village"], v1) is Access.READ
+    assert player_access(state, state.chats["village"], v1) is Access.READ
     v1.life = LifeState.SKELETON
     state.lockdown = False
-    assert player_access(state, state.groups["village"], v1) is Access.REACT
-    assert player_access(state, state.groups["dead"], v1) is Access.NONE
+    assert player_access(state, state.chats["village"], v1) is Access.REACT
+    assert player_access(state, state.chats["dead"], v1) is Access.NONE
 
 
 def test_private_channels_are_named_after_starting_role():
     g = basic_game()
-    names = sorted(gr.name for gr in g.state.groups_of_kind(GroupKind.PRIVATE))
+    names = sorted(gr.name for gr in g.state.chats_of_kind(ChatKind.PRIVATE))
     assert "ancient-wolf" in names and "ancient-wolf-2" in names and "silver-angel" in names
 
 

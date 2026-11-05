@@ -18,7 +18,7 @@ class RabidWolf(Role):
     name = "rabid_wolf"
     display = "Rabid wolf"
     faction = WEREWOLVES
-    groups = ("wolves",)
+    chats = ("wolves",)
     can_vote_wolf_kill = True
     description = (
         "Once per game you can go on a killing spree: name a living player and guess their role. A correct guess "

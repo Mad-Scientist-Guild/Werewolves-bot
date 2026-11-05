@@ -15,7 +15,7 @@ from Core.effects import Announcement
 from Core.errors import GameError
 from Core.factions import FACTIONS, faction_display
 from Core.resolution import describe_action
-from Core.state import ActionStatus, GameState, GroupKind, Phase, Player
+from Core.state import ActionStatus, GameState, ChatKind, Phase, Player
 from Services.discord_utils import is_gm, reply, reply_long
 from Services.role_commands import refresh_preview, role_autocomplete
 from Services.runtime import runtime
@@ -37,21 +37,21 @@ async def modifier_autocomplete(interaction: discord.Interaction, current: str) 
     return [app_commands.Choice(name=n, value=n) for n in sorted(MODIFIER_REGISTRY) if current.lower() in n][:25]
 
 
-async def group_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+async def chat_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     handle = runtime.games.find(interaction.guild_id)
     if handle is None:
         return []
-    groups = [g for g in handle.state.groups.values()
-              if g.kind not in (GroupKind.PRIVATE, GroupKind.VILLAGE, GroupKind.DEAD)]
+    chats = [g for g in handle.state.chats.values()
+              if g.kind not in (ChatKind.PRIVATE, ChatKind.VILLAGE, ChatKind.DEAD)]
     return [app_commands.Choice(name=f"{g.name} ({g.key})", value=g.key)
-            for g in groups if current.lower() in g.key.lower() or current.lower() in g.name.lower()][:25]
+            for g in chats if current.lower() in g.key.lower() or current.lower() in g.name.lower()][:25]
 
 
 def player_line(state: GameState, player: Player) -> str:
     life = player.life.value
     mods = f" +{', '.join(m.name for m in player.modifiers)}" if player.modifiers else ""
     mayor = " 🎩" if state.mayor == player.user_id else ""
-    family = state.groups[player.family].name if player.family in state.groups else "-"
+    family = state.chats[player.family].name if player.family in state.chats else "-"
     return (f"**{player.display_name}** — {player.role_name}{mods} [{faction_display(player.true_faction())}] "
             f"· {life} · {family}{mayor}")
 
@@ -97,25 +97,25 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         for actor in p.actors():
             data = {k: v for k, v in vars(actor).items() if k != "owner" and v not in ({}, [], None)}
             lines.append(f"`{actor.name}` state: {data}")
-        if p.statuses:
-            lines.append("Statuses: " + ", ".join(f"{s.key}(until {s.expires or 'removed'})" for s in p.statuses))
+        if p.conditions:
+            lines.append("Statuses: " + ", ".join(f"{s.key}(until {s.expires or 'removed'})" for s in p.conditions))
         for record in p.deaths:
             lines.append(f"Death: day {record.day} {record.phase}, {record.cause} by {record.killer_role}"
                          + (" (revived)" if record.revived else ""))
-        groups = [f"{g.name}={m.value}" for g in state.groups.values() for uid, m in g.members.items() if uid == p.user_id]
-        lines.append("Groups: " + ", ".join(groups))
-        lines.append(f"Public status: {p.public_status.value} · last active: {p.last_active_at or 'never'}")
+        chats = [f"{g.name}={m.value}" for g in state.chats.values() for uid, m in g.members.items() if uid == p.user_id]
+        lines.append("Chats: " + ", ".join(chats))
+        lines.append(f"Public status: {p.public_role.value} · last active: {p.last_active_at or 'never'}")
         recent = [a for a in state.actions if a.actor == p.user_id][-10:]
         if recent:
             lines.append("Recent actions:")
-            lines.extend(f"  #{a.id} {a.slot} {describe_action(state, a)} → {a.status.value} {a.note}" for a in recent)
+            lines.extend(f"  #{a.id} {a.resolves_at} {describe_action(state, a)} → {a.status.value} {a.note}" for a in recent)
         await reply_long(interaction, f"Player: {p.display_name}", "\n".join(lines))
 
     @app_commands.command(name="actions", description="Pending actions for the current day/night")
     async def pending_actions(self, interaction: discord.Interaction) -> None:
         state = runtime.games.get(interaction.guild_id).state
         pending = [a for a in state.actions if a.status is ActionStatus.PENDING]
-        lines = [f"#{a.id} [{a.slot}] {state.name(a.actor)}: {describe_action(state, a)}" for a in pending]
+        lines = [f"#{a.id} [{a.resolves_at}] {state.name(a.actor)}: {describe_action(state, a)}" for a in pending]
         wolves = state.ballots.get(voting.WOLVES)
         if wolves is not None:
             lines.append(f"Wolf vote: {voting.describe_counts(state, voting.tally_wolves(state, wolves))}")
@@ -224,7 +224,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
                                      "channel to catch up."))
         await reply(interaction, f"{replacement.display_name} has taken over from {player.display_name}.")
 
-    # --- roles, modifiers, factions, groups ----------------------------------------
+    # --- roles, modifiers, factions, chats -----------------------------------------
     @app_commands.command(name="set_role", description="Change a player's role during the game")
     @app_commands.autocomplete(role=role_autocomplete)
     async def set_role(self, interaction: discord.Interaction, player: discord.Member, role: str,
@@ -260,21 +260,21 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
                       targets=[p.user_id], alert=True)
         await reply(interaction, f"{player.display_name} now belongs to the {faction.name}.")
 
-    @app_commands.command(name="group", description="Add someone to a shared chat, or move them out (read-only)")
-    @app_commands.autocomplete(group=group_autocomplete)
+    @app_commands.command(name="chat", description="Add someone to a shared chat, or move them out (read-only)")
+    @app_commands.autocomplete(chat=chat_autocomplete)
     @app_commands.choices(action=[app_commands.Choice(name="add", value="add"),
                                   app_commands.Choice(name="remove (keeps read-only access)", value="remove")])
-    async def group(self, interaction: discord.Interaction, action: app_commands.Choice[str],
-                    player: discord.Member, group: str) -> None:
+    async def chat(self, interaction: discord.Interaction, action: app_commands.Choice[str],
+                    player: discord.Member, chat: str) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
-            g = state.group(group)
+            g = state.chat(chat)
             p = state.player(player.id)
             if action.value == "add":
                 g.add(p.user_id)
             else:
                 g.leave(p.user_id)
             state.log("GM", f"{p.display_name}: {action.value} {g.name}", actor=interaction.user.id, targets=[p.user_id])
-        await reply(interaction, f"{player.display_name}: {action.value} {group}.")
+        await reply(interaction, f"{player.display_name}: {action.value} {chat}.")
 
     @app_commands.command(name="decide", description="Make a pending decision on someone's behalf")
     async def decide(self, interaction: discord.Interaction, decision_id: int, choice: discord.Member) -> None:

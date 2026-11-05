@@ -16,7 +16,7 @@ import discord
 from discord.ext import commands
 
 from Core.access import Access, player_access
-from Core.state import GameState, Group, GroupKind, PublicStatus
+from Core.state import GameState, Chat, ChatKind, PublicRole
 from Services.discord_utils import slug
 from Services.game_service import GameHandle, GameService
 from Storage.db import Database
@@ -37,12 +37,12 @@ CATEGORIES = {
 FIXED_CHANNEL_CATEGORY = {"announcements": "important", "mod_log": "gm"}
 
 
-def category_key(kind: GroupKind) -> str:
-    if kind in (GroupKind.VILLAGE, GroupKind.DEAD):
+def category_key(kind: ChatKind) -> str:
+    if kind in (ChatKind.VILLAGE, ChatKind.DEAD):
         return "general"
-    if kind is GroupKind.FAMILY:
+    if kind is ChatKind.FAMILY:
         return "families"
-    if kind is GroupKind.PRIVATE:
+    if kind is ChatKind.PRIVATE:
         return "roles"
     return "factions"
 
@@ -73,16 +73,16 @@ BOT = discord.PermissionOverwrite(
 )
 
 PUBLIC_ROLE_NAMES = {
-    PublicStatus.DEAD: "Dead",
-    PublicStatus.VENGEFUL_SPIRIT: "Vengeful Spirit",
-    PublicStatus.SKELETON: "Skeleton",
+    PublicRole.DEAD: "Dead",
+    PublicRole.VENGEFUL_SPIRIT: "Vengeful Spirit",
+    PublicRole.SKELETON: "Skeleton",
 }
 
 # creation order (within each category)
 KIND_ORDER = [
-    GroupKind.VILLAGE, GroupKind.DEAD, GroupKind.FAMILY, GroupKind.WOLVES, GroupKind.UNDEAD,
-    GroupKind.SKELETONS, GroupKind.LOVERS, GroupKind.BROTHERS, GroupKind.COVEN, GroupKind.SPIRIT_LINE,
-    GroupKind.CUSTOM, GroupKind.PRIVATE,
+    ChatKind.VILLAGE, ChatKind.DEAD, ChatKind.FAMILY, ChatKind.WOLVES, ChatKind.UNDEAD,
+    ChatKind.SKELETONS, ChatKind.LOVERS, ChatKind.BROTHERS, ChatKind.COVEN, ChatKind.SPIRIT_CHAT,
+    ChatKind.CUSTOM, ChatKind.PRIVATE,
 ]
 
 
@@ -107,10 +107,10 @@ class ChannelManager:
             overwrites[gm_role] = STAFF
         return overwrites
 
-    def _group_overwrites(self, guild: discord.Guild, state: GameState, group: Group) -> dict:
+    def _chat_overwrites(self, guild: discord.Guild, state: GameState, chat: Chat) -> dict:
         overwrites = self._base_overwrites(guild, state)
         for player in state.players.values():
-            access = player_access(state, group, player)
+            access = player_access(state, chat, player)
             member = guild.get_member(player.user_id)
             if member is not None and access is not Access.NONE:
                 overwrites[member] = ACCESS_OVERWRITES[access]
@@ -186,30 +186,30 @@ class ChannelManager:
                 mutable.log("CHANNEL", "Base setup: " + (", ".join(done) or "linked existing channels"))
         return done
 
-    async def ensure_group_channels(self, guild: discord.Guild, handle: GameHandle) -> int:
-        """Create a channel for every group that doesn't have one yet."""
+    async def ensure_chat_channels(self, guild: discord.Guild, handle: GameHandle) -> int:
+        """Create a channel for every chat that doesn't have one yet."""
         state = handle.state
-        missing = [g for g in state.groups.values()
+        missing = [g for g in state.chats.values()
                    if g.channel_id is None or guild.get_channel(g.channel_id) is None]
         if not missing:
             return 0
         missing.sort(key=lambda g: (KIND_ORDER.index(g.kind) if g.kind in KIND_ORDER else 99, g.key))
         created: dict[str, int] = {}
         recreated: list[str] = []
-        for group in missing:
-            category = await self._category(guild, handle, category_key(group.kind))
+        for chat in missing:
+            category = await self._category(guild, handle, category_key(chat.kind))
             channel = await guild.create_text_channel(
-                slug(group.name) or group.key, category=category, topic=group.topic or None,
-                overwrites=self._group_overwrites(guild, state, group), reason="Werewolves game channel",
+                slug(chat.name) or chat.key, category=category, topic=chat.topic or None,
+                overwrites=self._chat_overwrites(guild, state, chat), reason="Werewolves game channel",
             )
-            if group.channel_id is not None:
-                recreated.append(group.name)
-            created[group.key] = channel.id
+            if chat.channel_id is not None:
+                recreated.append(chat.name)
+            created[chat.key] = channel.id
         async with self.games.mutate(guild.id) as mutable:
             for key, channel_id in created.items():
-                mutable.groups[key].channel_id = channel_id
+                mutable.chats[key].channel_id = channel_id
             mutable.log("CHANNEL", f"Created {len(created)} channel(s): "
-                        + ", ".join(mutable.groups[k].name for k in created))
+                        + ", ".join(mutable.chats[k].name for k in created))
             if recreated:
                 mutable.log("CHANNEL", "These channels had disappeared and were recreated (old messages are in the "
                             "deleted channel's audit trail only): " + ", ".join(recreated), alert=True)
@@ -217,12 +217,12 @@ class ChannelManager:
 
     # --- deleting a game ----------------------------------------------------------
     async def remove_game(self, guild: discord.Guild, state: GameState) -> list[str]:
-        """Delete the channels the bot created for this game (group channels,
+        """Delete the channels the bot created for this game (chat channels,
         and the fixed channels / categories it created itself - never ones a
         GM linked or that existed before), and take the public roles off the
         players. Only used by /game delete."""
         removed: list[str] = []
-        channel_ids = [g.channel_id for g in state.groups.values() if g.channel_id]
+        channel_ids = [g.channel_id for g in state.chats.values() if g.channel_id]
         channel_ids += state.data.get("created_channels", [])
         for channel_id in channel_ids:
             channel = guild.get_channel(channel_id)
@@ -249,28 +249,28 @@ class ChannelManager:
         async with handle.lock:
             state = handle.state
             perm_plan: list[tuple[discord.TextChannel, discord.Member, discord.PermissionOverwrite, str]] = []
-            for group in state.groups.values():
-                channel = guild.get_channel(group.channel_id) if group.channel_id else None
+            for chat in state.chats.values():
+                channel = guild.get_channel(chat.channel_id) if chat.channel_id else None
                 if not isinstance(channel, discord.TextChannel):
                     continue
                 for player in state.players.values():
                     member = guild.get_member(player.user_id)
                     if member is None:
                         continue
-                    access = player_access(state, group, player)
+                    access = player_access(state, chat, player)
                     current = channel.overwrites_for(member)
                     if access is Access.NONE and current.is_empty():
                         continue
                     desired = ACCESS_OVERWRITES[access]
                     if current.pair() != desired.pair():
-                        perm_plan.append((channel, member, desired, f"{player.display_name}: {group.name} → {access.value}"))
+                        perm_plan.append((channel, member, desired, f"{player.display_name}: {chat.name} → {access.value}"))
                 # replaced players (the Reaper) lose access to the game's chats
                 for player in state.players.values():
                     for old_id in player.previous_user_ids:
                         member = guild.get_member(old_id)
                         if member is not None and channel.overwrites_for(member).view_channel:
                             perm_plan.append((channel, member, ACCESS_OVERWRITES[Access.NONE],
-                                              f"{member.display_name} (replaced): {group.name} → none"))
+                                              f"{member.display_name} (replaced): {chat.name} → none"))
 
             role_plan: list[tuple[discord.Member, discord.Role, bool, str]] = []
             roles = {s: guild.get_role(state.discord_roles.get(s.value, 0)) for s in PUBLIC_ROLE_NAMES}
@@ -281,7 +281,7 @@ class ChannelManager:
                 for status, role in roles.items():
                     if role is None:
                         continue
-                    want = player.public_status is status
+                    want = player.public_role is status
                     has = role in member.roles
                     if want != has:
                         role_plan.append((member, role, want, f"{player.display_name}: {'+' if want else '-'}{role.name}"))
