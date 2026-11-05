@@ -71,7 +71,7 @@ class Scheduler(commands.Cog):
         kind = TransitionKind(state.next_transition.kind)
         late = now - at
         limit = timedelta(minutes=state.settings.schedule.catch_up_limit_minutes)
-        if late > limit and not state.data.get("catch_up_approved"):
+        if late > limit and not state.catch_up_approved:
             async with runtime.games.mutate(handle.guild_id) as mutable:
                 mutable.paused = True
                 mutable.log("SCHEDULER", f"The bot missed the {kind.value} transition ({at:%a %H:%M}, "
@@ -107,7 +107,7 @@ class Scheduler(commands.Cog):
                                        "check the final report.", alert=True)
             nt = state.next_transition
             if nt is not None and transition_time(nt) > now_in(state):
-                state.data.pop("catch_up_approved", None)
+                state.catch_up_approved = False
 
 
 async def setup(bot: commands.Bot) -> None:

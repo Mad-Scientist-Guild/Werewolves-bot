@@ -95,7 +95,7 @@ def _lynch_announcement(state: GameState, ctx: Resolution, tally: voting.Tally) 
 
 def open_second_lynch(state: GameState, counselor: int) -> None:
     voting.open_ballot(state, voting.LYNCH2, allow_abstain=False)
-    state.data["second_lynch_by"] = counselor
+    state.second_lynch_by = counselor
     state.lockdown = True
     state.emit(Announcement(
         title="A SECOND LYNCH",
@@ -110,13 +110,12 @@ def end_second_lynch(state: GameState, result: FlowResult) -> None:
     if ballot is None:
         return
     tally = voting.tally_second_lynch(state, ballot)
-    counselor = state.data.get("second_lynch_by")
     state.emit(VoteResults(title=f"Second lynch votes — day {state.day}", text=voting.published_votes(state, ballot)))
     if tally.outcome == "lynch":
         result.add("Second lynch", execute_lynch(state, tally.target, second=True, voters=voting.voters_for(ballot, tally.target)))
     else:
         options = tally.tied or [p.user_id for p in state.alive_players()]
-        chooser = state.find_player(counselor)
+        chooser = state.find_player(state.second_lynch_by)
         create_decision(
             state, "lynch2_tiebreak", chooser.user_id if chooser and chooser.alive else None, options,
             "The second lynch is tied - as Ruthless Counselor you decide who dies:" if tally.tied

@@ -60,11 +60,11 @@ def _newspaper(state: GameState, result: FlowResult) -> None:
     url = state.settings.newspaper_url
     if url:
         state.emit(NewspaperPost(url=url))
-        state.data.setdefault("newspapers", {})[str(state.day)] = url
+        state.newspapers[state.day] = url
         state.settings.newspaper_url = None
     else:
         state.log("NEWSPAPER", f"No newspaper image was set for day {state.day}.", alert=True)
-    state.data["newspaper_day"] = state.day
+    state.newspaper_published_day = state.day
     if state.day >= 2:
         voting.open_ballot(state, voting.LYNCH)
         state.emit(Announcement(title="VOTING IS OPEN",

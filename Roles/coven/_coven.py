@@ -15,7 +15,7 @@ from __future__ import annotations
 import random
 
 from Core.effects import ChatMessage
-from Core.factions import COVEN
+from Core.factions import COVEN, Faction, faction_eliminated, register_faction
 from Core.players import seed
 from Roles.role import *
 from Services.discord_utils import reply
@@ -106,8 +106,16 @@ def full_coven(state: GameState) -> bool:
 
 # --- the kill list --------------------------------------------------------------------
 
+def kill_list(state: GameState) -> list[str]:
+    return state.data.get("coven_kill_list", [])
+
+
+def set_kill_list(state: GameState, roles: list[str]) -> None:
+    state.data["coven_kill_list"] = list(roles)
+
+
 def ensure_kill_list(state: GameState) -> list[str]:
-    existing = state.data.get("coven_kill_list")
+    existing = kill_list(state)
     if existing:
         return existing
     in_game = sorted({p.original_role or p.role_name for p in state.players.values()
@@ -118,14 +126,24 @@ def ensure_kill_list(state: GameState) -> list[str]:
     picked = rng.sample(in_game, min(KILL_LIST_IN_GAME, len(in_game)))
     picked += rng.sample(absent, min(KILL_LIST_ABSENT, len(absent)))
     rng.shuffle(picked)
-    state.data["coven_kill_list"] = picked
+    set_kill_list(state, picked)
     state.log("COVEN", "Coven kill list: " + ", ".join(picked) + " (change it with `/gm kill_list`)", alert=True)
     return picked
 
 
 def kill_list_text(state: GameState) -> str:
-    roles = state.data.get("coven_kill_list", [])
+    roles = kill_list(state)
     return "\n".join(f"• {ROLE_REGISTRY[r].title() if r in ROLE_REGISTRY else r}" for r in roles) or "(empty)"
+
+
+def _coven_win(state: GameState) -> bool:
+    roles = set(kill_list(state))
+    if not roles or faction_eliminated(state, COVEN):
+        return False
+    return not any(p.original_role in roles for p in state.alive_players())
+
+
+register_faction(Faction(COVEN, "Coven", "Every role on the coven kill list is gone.", _coven_win))
 
 
 # --- shared role base & commands -----------------------------------------------------------

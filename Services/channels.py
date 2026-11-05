@@ -137,7 +137,7 @@ class ChannelManager:
             action = "Created"
         async with self.games.mutate(guild.id) as mutable:
             if action == "Created":
-                mutable.data.setdefault("created_categories", []).append(category.id)
+                mutable.created_categories.append(category.id)
             mutable.categories.setdefault(key, []).append(category.id)
             mutable.log("CHANNEL", f"{action} category {category.name}.")
         return category
@@ -181,7 +181,7 @@ class ChannelManager:
             mutable.channels.update(found)
             mutable.discord_roles.update(roles)
             # remembered so /game delete only removes channels the bot made itself
-            mutable.data.setdefault("created_channels", []).extend(created)
+            mutable.created_channels.extend(created)
             if done or found:
                 mutable.log("CHANNEL", "Base setup: " + (", ".join(done) or "linked existing channels"))
         return done
@@ -223,13 +223,13 @@ class ChannelManager:
         players. Only used by /game delete."""
         removed: list[str] = []
         channel_ids = [g.channel_id for g in state.chats.values() if g.channel_id]
-        channel_ids += state.data.get("created_channels", [])
+        channel_ids += state.created_channels
         for channel_id in channel_ids:
             channel = guild.get_channel(channel_id)
             if channel is not None:
                 await channel.delete(reason="Werewolves game deleted")
                 removed.append(f"#{channel.name}")
-        for category_id in state.data.get("created_categories", []):
+        for category_id in state.created_categories:
             category = guild.get_channel(category_id)
             if isinstance(category, discord.CategoryChannel) and not category.channels:
                 await category.delete(reason="Werewolves game deleted")

@@ -92,12 +92,12 @@ def make_vengeful_spirit(ctx: Resolution, player: Player, *, allowed: list[int],
 @register_final_hook
 def first_deaths_become_spirits(ctx: Resolution) -> None:
     """Everyone in the first batch of deaths becomes a Vengeful Spirit (GM kills don't count)."""
-    if ctx.state.data.get("first_death_seen"):
+    if ctx.state.first_death_seen:
         return
     deaths = [(p, r) for p, r in ctx.deaths if r.killer_role != "gm"]
     if not deaths:
         return
-    ctx.state.data["first_death_seen"] = True
+    ctx.state.first_death_seen = True
     for player, record in deaths:
         make_vengeful_spirit(ctx, player, allowed=list(record.killer_ids),
                              any_werewolf=record.killer_role == "werewolves", reason="among the first to die")

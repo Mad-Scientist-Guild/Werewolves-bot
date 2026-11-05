@@ -407,7 +407,7 @@ with no Discord and no database.
 
 Two pitfalls:
 - Don't give a player the same name as a role. `g.act(..., role="seer")` would turn `"seer"` into that player's id.
-- The first death in a game creates a Vengeful Spirit. Set `g.state.data["first_death_seen"] = True` if that
+- The first death in a game creates a Vengeful Spirit. Set `g.state.first_death_seen = True` if that
   gets in the way of your scenario.
 
 ---

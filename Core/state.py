@@ -366,10 +366,14 @@ class GameState:
     chats: dict[str, Chat] = field(default_factory=dict)
     channels: dict[str, int] = field(default_factory=dict)       # announcements, mod_log
     categories: dict[str, list[int]] = field(default_factory=dict)   # category key -> ids (overflow adds more)
+    # channels / categories the bot created itself: /game delete removes only these (and chat channels)
+    created_channels: list[int] = field(default_factory=list)
+    created_categories: list[int] = field(default_factory=list)
     discord_roles: dict[str, int] = field(default_factory=dict)  # PublicRole value -> role id
 
     settings: Settings = field(default_factory=Settings)
     role_pool: dict[str, int] = field(default_factory=dict)
+    assignment_preview: dict[int, str] | None = None   # /setup assign preview, used by /setup assign apply
 
     actions: list[SubmittedAction] = field(default_factory=list)
     ballots: dict[str, Ballot] = field(default_factory=dict)
@@ -377,6 +381,9 @@ class GameState:
     decisions: list[Decision] = field(default_factory=list)
     night_overrides: list[NightOverride] = field(default_factory=list)
     next_transition: Transition | None = None
+    catch_up_approved: bool = False   # a GM resumed the clock: overdue transitions may run
+    newspaper_published_day: int = 0
+    newspapers: dict[int, str] = field(default_factory=dict)   # day -> image url
     eavesdrops: list[Eavesdrop] = field(default_factory=list)
     questions: list[YesNoQuestion] = field(default_factory=list)
     telepath_messages: list[TelepathMessage] = field(default_factory=list)
@@ -386,9 +393,13 @@ class GameState:
     mayor: int | None = None
     mayor_successor: int | None = None
     lockdown: bool = False
+    second_lynch_by: int | None = None   # the Ruthless Counselor who called the second lynch
+    first_death_seen: bool = False       # the first deaths (who become Vengeful Spirits) have happened
     seeds: dict[str, int] = field(default_factory=dict)
     counters: dict[str, int] = field(default_factory=dict)
-    data: dict[str, Any] = field(default_factory=dict)  # free-form game data owned by roles
+    # free-form data owned by roles and factions: only read/written through helpers in the
+    # owning Roles/ module, keys start with its name ("coven_kill_list", "brother_invites")
+    data: dict[str, Any] = field(default_factory=dict)
 
     # transient: flushed by the service layer in the same DB transaction as the state
     pending_logs: list[LogEntry] = transient(default_factory=list)

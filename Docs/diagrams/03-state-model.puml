@@ -11,16 +11,23 @@ class GameState {
   paused: bool
   started_at / ended_at / winner
   role_pool: dict[str, int]
+  assignment_preview: dict[int, str]
   backups: list[int]
   channels: dict[str, int]
   categories: dict[str, list[int]]
+  created_channels / created_categories: list[int]
   discord_roles: dict[str, int]
   mayor / mayor_successor: int
   lockdown: bool
+  second_lynch_by: int
+  first_death_seen: bool
   next_transition: Transition
+  catch_up_approved: bool
+  newspaper_published_day: int
+  newspapers: dict[int, str]
   seeds / counters: dict
   aliases: dict
-  data: dict
+  data: dict (role / faction data, via helpers)
   .. transient (never stored as state) ..
   pending_logs: list[LogEntry]
   pending_effects: list[Effect]

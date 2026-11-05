@@ -126,20 +126,19 @@ class Setup(commands.GroupCog, group_name="setup", group_description="(GM) Confi
             if confirm.value == "preview":
                 rng_seed = random.SystemRandom().randrange(1, 2**31)
                 plan = lifecycle.plan_assignment(state, rng_seed)
-                state.data["assignment_preview"] = {str(k): v for k, v in plan.items()}
+                state.assignment_preview = plan
                 state.log("SETUP", "Role assignment preview made.", actor=interaction.user.id)
                 text = "\n".join(f"{state.name(uid)} → {ROLE_REGISTRY[role].title()}"
                                  for uid, role in sorted(plan.items(), key=lambda kv: kv[1]))
                 title = "Assignment preview — run `/setup assign apply` to use it"
             else:
-                preview = state.data.get("assignment_preview")
-                if not preview:
+                plan = state.assignment_preview
+                if not plan:
                     raise GameError("Make a preview first with `/setup assign preview`.")
-                plan = {int(k): v for k, v in preview.items()}
                 if set(plan) != set(state.players):
                     raise GameError("The players changed since the preview - make a new one.")
                 lifecycle.apply_assignment(state, plan)
-                state.data["assignment_preview"] = None
+                state.assignment_preview = None
                 state.log("SETUP", "Roles assigned: " + ", ".join(f"{state.name(u)}={r}" for u, r in plan.items()),
                           actor=interaction.user.id)
                 text = "Roles assigned. Check them with `/gm status`."

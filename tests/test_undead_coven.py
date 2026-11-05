@@ -5,6 +5,7 @@ from Core.access import Access, player_access
 from Core.errors import GameError
 from Core.factions import winners
 from Core.state import LifeState
+from Roles.coven import _coven
 from Roles.coven._coven import circle_of
 from tests.builder import GameBuilder
 
@@ -12,7 +13,7 @@ from tests.builder import GameBuilder
 def build(**roles: str) -> GameBuilder:
     g = GameBuilder()
     g.players(**roles)
-    g.state.data["first_death_seen"] = True   # keep the Vengeful Spirit out of these scenarios
+    g.state.first_death_seen = True   # keep the Vengeful Spirit out of these scenarios
     return g
 
 
@@ -157,7 +158,7 @@ def coven_game() -> GameBuilder:
 
 def test_kill_list_is_generated():
     g = coven_game()
-    kill_list = g.state.data["coven_kill_list"]
+    kill_list = _coven.kill_list(g.state)
     in_game = {"normal_wolf", "seer", "villager"}
     assert in_game <= set(kill_list) and len(kill_list) == len(in_game) + 3
     assert not any(role in kill_list for role in ("curseweaver", "diviner", "enchantress", "hag_mother"))
@@ -169,14 +170,14 @@ def test_finding_members_builds_and_merges_chats():
     g.act("ench", "find", target="seery")                     # wrong
     g.night()
     assert circle_of(g.state, g.id("curse")) == {g.id("curse"), g.id("div")}
-    first_chat = g.state.data["coven_chat_of"][str(g.id("curse"))]
+    first_chat = _coven.chat_of(g.state, g.id("curse"))
     assert any("kill list" in m for m in g.messages_for("div"))
     assert "not part of the Coven" in g.messages_for("ench")[-1]
     g.newspaper(); g.dusk()
     g.act("ench", "find", target="div")                     # finding ONE member joins the whole circle
     g.night()
     assert circle_of(g.state, g.id("ench")) == {g.id("curse"), g.id("div"), g.id("ench")}
-    assert g.state.data["coven_chat_of"][str(g.id("ench"))] == first_chat
+    assert _coven.chat_of(g.state, g.id("ench")) == first_chat
     assert player_access(g.state, g.state.chats[first_chat], g.p("ench")) is Access.WRITE
 
 
@@ -184,11 +185,11 @@ def test_merging_two_groups_archives_their_chats():
     g = coven_game()
     g.act("curse", "find", target="div"); g.act("ench", "find", target="hag")
     g.night(); g.newspaper(); g.dusk()
-    old_a = g.state.data["coven_chat_of"][str(g.id("curse"))]
-    old_b = g.state.data["coven_chat_of"][str(g.id("ench"))]
+    old_a = _coven.chat_of(g.state, g.id("curse"))
+    old_b = _coven.chat_of(g.state, g.id("ench"))
     g.act("div", "find", target="ench")
     g.night()
-    new = g.state.data["coven_chat_of"][str(g.id("curse"))]
+    new = _coven.chat_of(g.state, g.id("curse"))
     assert new not in (old_a, old_b)
     assert g.state.chats[old_a].archived and g.state.chats[old_b].archived
     assert player_access(g.state, g.state.chats[old_a], g.p("curse")) is Access.READ       # still readable

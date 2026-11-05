@@ -1,5 +1,5 @@
 from Core.resolution import register_conversion
-from Roles.coven._coven import CovenCommands, CovenRole, connect, full_coven
+from Roles.coven._coven import CovenCommands, CovenRole, connect, full_coven, kill_list
 from Roles.role import *
 
 CHANGELING_NIGHTS = 3
@@ -40,7 +40,7 @@ class HagMother(CovenRole):
 
     def validate(self, state: GameState, action: SubmittedAction) -> None:
         super().validate(state, action)
-        if action.ability == "check" and action.params["role"] not in state.data.get("coven_kill_list", []):
+        if action.ability == "check" and action.params["role"] not in kill_list(state):
             raise GameError("That role isn't on the kill list.")
         if action.ability == "changeling" and state.player(action.target).true_faction() == COVEN:
             raise GameError("They're already part of the Coven.")

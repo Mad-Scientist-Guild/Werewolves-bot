@@ -45,7 +45,7 @@ def allowed_next(state: GameState) -> set[TransitionKind]:
     """Transitions that can come next from the current phase."""
     if state.phase is Phase.DAY:
         kinds = {TransitionKind.DUSK}
-        if state.data.get("newspaper_day") != state.day:
+        if state.newspaper_published_day != state.day:
             kinds.add(TransitionKind.NEWSPAPER)
         return kinds
     if state.phase is Phase.NIGHT:

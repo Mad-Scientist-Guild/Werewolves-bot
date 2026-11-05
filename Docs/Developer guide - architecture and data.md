@@ -79,10 +79,14 @@ classDiagram
         phase, day, paused, winner
         settings: Settings
         role_pool: dict
+        assignment_preview: dict
         channels: dict
         categories: dict
+        created_channels, created_categories: list
         discord_roles: dict
         mayor, mayor_successor, lockdown
+        second_lynch_by, first_death_seen
+        catch_up_approved, newspaper_published_day, newspapers
         seeds, counters, data: dict
         next_transition: Transition
         pending_logs - transient
@@ -164,8 +168,10 @@ Some concepts that aren't obvious from the field names:
 - **Actions** are stored as data. `resolves_at` says when an action resolves (`night:3`, `dusk:3` or `instant`).
   `status` records what happened (pending, replaced, cancelled, resolved, blocked, failed). Old actions are kept
   for the record.
-- **`state.data`** is a free-form dict for game-wide role data (the coven kill list, coven links, the
-  first-death flag...). Keys must be strings.
+- **Everything the engine itself uses is a typed field** on `GameState` (e.g. `second_lynch_by`,
+  `first_death_seen`, `newspapers`). **`state.data`** is only for data owned by one role or faction (the coven
+  kill list, coven links, Brother invites). The owning `Roles/` module reads and writes it through its own
+  helpers (`_coven.kill_list(state)`), and its keys start with the owner's name. Keys must be strings.
 - **Transient fields.** `pending_logs`, `pending_effects` and `pending_reports` are never stored as state. They
   are what `state.log(...)`, `state.emit(...)` and `state.report(...)` collect during one change. The service
   writes them to their own tables in the same transaction, then clears them.
@@ -429,7 +435,7 @@ names are reused. Channels are never renamed.
 | Registry | Where | Filled by |
 |---|---|---|
 | `ROLE_REGISTRY` / `MODIFIER_REGISTRY` | `Core/actor.py` | `@register_role` / `@register_modifier` |
-| `FACTIONS` | `Core/factions.py` | `register_faction(Faction(...))`, with the win check |
+| `FACTIONS` | `Core/factions.py` | `register_faction(Faction(...))`, with the win check (the Coven registers itself in `Roles/coven/_coven.py`) |
 | `CHAT_DEFS` | `Core/players.py` | `register_chat(key, kind, channel_name)` |
 | `CONVERSIONS` | `Core/resolution.py` | `register_conversion(kind, fn)` |
 | `PREPARE_HOOKS` / `FINAL_HOOKS` | `Core/resolution.py` | `register_prepare_hook` / `register_final_hook` |
@@ -448,7 +454,9 @@ All of these are filled at import time. Importing `Roles` (which `bot.py` and th
 |---|---|
 | add or remove a role | a file in `Roles/<faction>/` (see the role guide) |
 | add a game-wide night rule | a prepare or final hook in a `Roles/.../_something.py` module |
-| add a faction | `register_faction` in `Core/factions.py` + roles with that `faction` |
+| add a faction | `register_faction` (in `Core/factions.py`, or in the faction's `Roles/` module like the Coven's in `_coven.py`) + roles with that `faction` |
+| keep game-wide data for one role or faction | `state.data`, behind helpers in that role's module, keys prefixed with its name |
+| keep game-wide data the engine itself needs | a typed field on `GameState` |
 | add a transition or change the daily rhythm | `Core/clock.py` (`TransitionKind`, `allowed_next`) + a handler in `Core/transitions.py` |
 | add a kind of message or Discord side effect | an `Effect` subclass in `Core/effects.py` + a branch in `EffectDelivery.apply` |
 | add a GM tool | a command in `Cogs/gm.py` (watch the 25-subcommand limit; there's a `clock` subgroup) |

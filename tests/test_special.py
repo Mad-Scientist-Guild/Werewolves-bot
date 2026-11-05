@@ -31,7 +31,7 @@ def announcements(g: GameBuilder) -> list[str]:
 def lovers_game() -> GameBuilder:
     g = build(cupid="cupid", w1="normal_wolf", w2="normal_wolf", a="villager", b="villager",
               v1="villager", v2="villager", v3="villager")
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     g.start(); g.dusk()
     g.act("cupid", "link", first="a", second="b")
     return g
@@ -61,7 +61,7 @@ def test_heartbreak_and_cupid_joins_the_villagers():
 def test_priest_blessing_does_not_stop_heartbreak():
     g = build(cupid="cupid", priest="priest", w1="normal_wolf", w2="normal_wolf", a="villager", b="villager",
               v="villager")
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     g.families(("a",), ("b", "priest"), ("cupid", "w1", "w2", "v"))
     g.start(); g.dusk(); g.act("cupid", "link", first="a", second="b"); g.night(); g.newspaper()
     g.act("priest", "bless", member="b"); g.dusk()
@@ -87,7 +87,7 @@ def test_cupid_can_link_themselves():
 def test_turned_lover_does_not_die_of_heartbreak_but_partner_does():
     g = build(cupid="cupid", an="ancient_wolf", w="normal_wolf", a="villager", b="villager", v="villager",
               v2="villager")
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     g.start(); g.dusk()
     g.act("cupid", "link", first="a", second="b"); pack(g, "a", "an", "w"); g.act("an", "turn")
     g.night()
@@ -101,7 +101,7 @@ def test_turned_lover_does_not_die_of_heartbreak_but_partner_does():
 
 def test_betrayed_lover_becomes_a_vengeful_spirit():
     g = build(cupid="cupid", slut="village_slut", w1="normal_wolf", w2="normal_wolf", a="villager", v="villager")
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     g.start(); g.dusk()
     g.act("cupid", "link", first="slut", second="a"); g.night(); g.newspaper(); g.dusk()
     g.act("slut", "visit", target="v"); pack(g, "v", "w1", "w2")             # the slut dies cheating
@@ -202,7 +202,7 @@ def test_brothers_add_someone_unanimously():
 
 def day_two(**roles) -> GameBuilder:
     g = build(**roles)
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     g.start(); g.dusk(); g.night(); g.newspaper()
     return g
 
@@ -275,7 +275,7 @@ def test_spying_counts_as_leaving_the_house():
 
 def test_dead_question_counts_answers_from_the_dead():
     g = spirit_game()
-    g.state.data["first_death_seen"] = True
+    g.state.first_death_seen = True
     pack(g, "a", "w1", "w2", "feral"); g.act("feral", "eat", target="b"); g.night()
     g.act("spirit", "ask", question="Was it a wolf?")
     question = g.state.questions[0]

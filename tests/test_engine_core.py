@@ -287,7 +287,7 @@ def test_second_lynch_counselor_picks_on_tie():
 
 def test_night_death_is_quiet_until_the_newspaper():
     g = basic_game()
-    g.state.data["first_death_seen"] = True   # not the first death (that one becomes a Vengeful Spirit)
+    g.state.first_death_seen = True   # not the first death (that one becomes a Vengeful Spirit)
     g.dusk(); g.wolf_vote("w1", "v1"); g.wolf_vote("w2", "v1"); g.night()
     v1 = g.p("v1")
     assert v1.dead and v1.public_role is PublicRole.NONE
@@ -356,3 +356,14 @@ def test_cancel_without_naming_the_ability():
     action = g.act("angel", "protect", target="v1")
     assert actions.cancel(g.state, g.id("angel"), None, source="silver_angel") is action
     assert action.status is ActionStatus.CANCELLED
+
+
+def test_typed_game_fields_round_trip():
+    g = basic_game()
+    g.state.assignment_preview = {g.id("v1"): "seer"}
+    g.state.newspapers[2] = "https://example.com/day2.png"
+    g.state.second_lynch_by = g.id("angel")
+    restored = decode(encode(g.state))
+    assert restored.assignment_preview == {g.id("v1"): "seer"}      # int keys survive JSON
+    assert restored.newspapers == {2: "https://example.com/day2.png"}
+    assert restored.second_lynch_by == g.id("angel")

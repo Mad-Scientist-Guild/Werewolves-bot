@@ -16,6 +16,7 @@ from Core.errors import GameError
 from Core.factions import FACTIONS, faction_display
 from Core.resolution import describe_action
 from Core.state import ActionStatus, GameState, ChatKind, Phase, Player
+from Roles.coven._coven import kill_list, set_kill_list
 from Services.discord_utils import is_gm, reply, reply_long
 from Services.role_commands import refresh_preview, role_autocomplete
 from Services.runtime import runtime
@@ -289,10 +290,10 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
         async with runtime.games.mutate(interaction.guild_id) as state:
             if roles:
                 names = [actions.normalise_role(r) for r in roles.split(",") if r.strip()]
-                state.data["coven_kill_list"] = names
+                set_kill_list(state, names)
                 state.log("GM", f"Coven kill list set by {interaction.user.display_name}: {', '.join(names)}",
                           actor=interaction.user.id, alert=True)
-            current = state.data.get("coven_kill_list", [])
+            current = kill_list(state)
         text = ", ".join(ROLE_REGISTRY[r].title() if r in ROLE_REGISTRY else r for r in current)
         await reply(interaction, f"**Coven kill list ({len(current)}):** {text or 'not generated yet'}")
 
@@ -358,7 +359,7 @@ class GM(commands.GroupCog, group_name="gm", group_description="(GM) Game Master
     async def resume(self, interaction: discord.Interaction) -> None:
         async with runtime.games.mutate(interaction.guild_id) as state:
             state.paused = False
-            state.data["catch_up_approved"] = True
+            state.catch_up_approved = True
             state.log("GM", f"Clock resumed by {interaction.user.display_name}.", actor=interaction.user.id, alert=True)
         await reply(interaction, "▶️ Resumed. Any missed transitions will run in order within a minute.")
 

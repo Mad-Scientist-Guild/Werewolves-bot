@@ -92,18 +92,10 @@ def _lovers_win(state: GameState) -> bool:
     return bool(alive) and all(p.true_faction() == LOVERS or (p.role_name == "cupid") for p in alive)
 
 
-def _coven_win(state: GameState) -> bool:
-    kill_list = set(state.data.get("coven_kill_list", []))
-    if not kill_list or faction_eliminated(state, COVEN):
-        return False
-    return not any(p.original_role in kill_list for p in state.alive_players())
-
-
 register_faction(Faction(VILLAGERS, "Villagers", "The Werewolves, Coven and Undead are all gone.", _villagers_win))
 register_faction(Faction(WEREWOLVES, "Werewolves", "More werewolves than non-werewolves are alive.", _werewolves_win))
 register_faction(Faction(UNDEAD, "Undead", "There are more undead than living players.", _undead_win))
 register_faction(Faction(LOVERS, "Lovers", "The lovers (and Cupid) are the last ones alive.", _lovers_win))
-register_faction(Faction(COVEN, "Coven", "Every role on the coven kill list is gone.", _coven_win))
 
 
 def winners(state: GameState) -> list[str]:
