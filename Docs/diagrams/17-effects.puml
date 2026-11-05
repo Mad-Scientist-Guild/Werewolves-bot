@@ -1,0 +1,76 @@
+@startuml 17-effects
+!pragma layout smetana
+allowmixing
+title Effects (Core/effects.py) and where EffectDelivery sends them
+
+abstract class Effect <<Polymorphic "effect">>
+class PrivateMessage {
+  player, text, title
+}
+class ChatMessage {
+  chat, text, title
+}
+class Announcement {
+  text, title, color
+}
+class VoteResults {
+  text, title
+}
+class NewspaperPost {
+  url
+}
+class RoleCard {
+  player, role, changed, note
+}
+class DecisionPrompt {
+  decision_id
+}
+class QuestionPrompt {
+  question_id
+}
+class TelepathPrompt {
+  telepath_message_id
+}
+class CreateChannel {
+  chat_key
+}
+class DirectMessage {
+  user_id, text
+}
+
+Effect <|-- PrivateMessage
+Effect <|-- ChatMessage
+Effect <|-- Announcement
+Effect <|-- VoteResults
+Effect <|-- NewspaperPost
+Effect <|-- RoleCard
+Effect <|-- DecisionPrompt
+Effect <|-- QuestionPrompt
+Effect <|-- TelepathPrompt
+Effect <|-- CreateChannel
+Effect <|-- DirectMessage
+
+rectangle "private channel" as PC
+rectangle "chat channel" as CC
+rectangle "#announcements" as AN
+rectangle "dead chat or\nprivate channel" as QC
+rectangle "chooser's private\nchannel or #mod-log" as DC
+rectangle "Discord DM" as DM
+
+PrivateMessage ..> PC
+RoleCard ..> PC
+TelepathPrompt ..> PC
+ChatMessage ..> CC
+Announcement ..> AN
+VoteResults ..> AN
+NewspaperPost ..> AN
+QuestionPrompt ..> QC
+DecisionPrompt ..> DC
+DirectMessage ..> DM
+
+note bottom of Effect
+  state.emit(effect) -> pending_effects -> outbox table
+  (same transaction as the state) -> EffectDelivery,
+  up to 5 attempts, then a GM alert.
+end note
+@enduml

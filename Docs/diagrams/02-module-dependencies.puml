@@ -1,0 +1,100 @@
+@startuml 02-module-dependencies
+!pragma layout smetana
+title Module dependencies (arrows = "imports")
+skinparam packageStyle folder
+
+package Core {
+  [errors]
+  [serialize]
+  [state]
+  [abilities]
+  [effects]
+  [actor]
+  [resolution]
+  [access]
+  [factions]
+  [voting]
+  [clock]
+  [actions]
+  [flow]
+  [realtime]
+}
+package Storage {
+  [codec]
+  [db]
+}
+package Services {
+  [runtime]
+  [game_service]
+  [role_commands]
+  [channels]
+  [effects ] as SEffects
+  [audit]
+  [views]
+  [worker]
+  [discord_utils]
+}
+package Roles {
+  [role (kit)] as Kit
+  [werewolves/*, villagers/*,\nundead/*, coven/*,\nlovers/*, modifiers/*] as RoleFiles
+}
+package Cogs {
+  [game, setup, gm, lynch,\nmayor, player, scheduler,\nactivity, realtime] as CogFiles
+}
+[bot.py] as Bot
+
+[state] --> [serialize]
+[state] --> [errors]
+[effects] --> [serialize]
+[actor] --> [abilities]
+[actor] --> [state]
+[resolution] --> [state]
+[resolution] --> [effects]
+[access] --> [state]
+[factions] --> [state]
+[voting] --> [state]
+[clock] --> [state]
+[actions] --> [actor]
+[actions] --> [resolution]
+[flow] --> [voting]
+[flow] --> [resolution]
+[flow] --> [access]
+[flow] --> [clock]
+[flow] --> [factions]
+[realtime] --> [access]
+[realtime] --> [clock]
+
+[codec] --> [serialize]
+[codec] --> [state]
+
+[game_service] --> [codec]
+[game_service] --> [db]
+[role_commands] --> [actions]
+[role_commands] --> [runtime]
+[channels] --> [access]
+[SEffects] --> [channels]
+[SEffects] --> [views]
+[views] --> [flow]
+[views] --> [realtime]
+[worker] --> [SEffects]
+[worker] --> [channels]
+[worker] --> [audit]
+
+Kit --> [actor]
+Kit --> [flow]
+Kit --> [resolution]
+Kit --> [role_commands]
+RoleFiles --> Kit
+
+CogFiles --> [runtime]
+CogFiles --> [flow]
+Bot --> [game_service]
+Bot --> [worker]
+Bot --> RoleFiles : import Roles\n(registers everything)
+Bot --> CogFiles : load_extension
+
+note right of Core
+  Rule: nothing in Core imports
+  Services, Cogs, Storage or discord.
+end note
+@enduml

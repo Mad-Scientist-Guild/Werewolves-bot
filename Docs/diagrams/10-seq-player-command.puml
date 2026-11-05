@@ -1,0 +1,45 @@
+@startuml 10-seq-player-command
+title Life of a change: a player uses /seer check
+autonumber
+
+actor Player
+participant "SeerCommands\n(RoleCommands.use)" as RC
+participant "GameService.mutate" as GS
+participant "actions.submit\n(Core)" as Submit
+participant Database as DB
+participant GameWorker as W
+participant ChannelManager as CM
+participant EffectDelivery as ED
+participant AuditPoster as AP
+participant Discord
+
+Player -> RC : /seer check target
+RC -> GS : async with mutate(guild)
+activate GS
+GS -> GS : acquire game lock\ndeepcopy backup
+GS -> Submit : submit(state, player, "check", params)
+activate Submit
+Submit -> Submit : find_ability, moment_for,\nvalidate_params, validate()
+Submit -> Submit : store SubmittedAction\nstate.log(...)
+Submit --> GS : action
+deactivate Submit
+GS -> DB : commit_game(state, events,\neffects, reports)
+alt anything raised
+  GS -> GS : restore backup, re-raise
+  GS --> RC : GameError
+  RC --> Player : red ephemeral reply\n(+ REJECTED event)
+else ok
+  GS --> RC : release lock
+  deactivate GS
+  RC --> Player : ephemeral confirmation
+  GS ->> W : notify(handle)
+  W -> CM : ensure_chat_channels
+  W -> ED : deliver(outbox)
+  ED -> Discord : messages
+  ED -> DB : mark delivered
+  W -> CM : sync permissions + public roles
+  W ->> AP : wake
+  AP -> DB : unposted events / reports
+  AP -> Discord : batched embeds in #mod-log
+end
+@enduml

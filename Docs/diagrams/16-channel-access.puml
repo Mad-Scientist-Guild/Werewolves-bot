@@ -1,0 +1,44 @@
+@startuml 16-channel-access
+title player_access(state, chat, player) - Core/access.py
+
+start
+switch (chat.kind?)
+case (VILLAGE)
+  if (archived?) then (yes)
+    :READ;
+  elseif (player alive?) then (yes)
+    :WRITE (READ during lockdown);
+  elseif (skeleton?) then (yes)
+    :REACT;
+  else
+    :READ;
+  endif
+case (DEAD)
+  if (dead and not an active\nVengeful Spirit?) then (yes)
+    :WRITE (READ if archived);
+  else (no)
+    :NONE (death rules);
+  endif
+case (any other)
+  if (no membership or REVOKED?) then (yes)
+    :NONE;
+  elseif (FORMER member or chat archived?) then (yes)
+    :READ;
+  elseif (PRIVATE?) then (yes)
+    :WRITE (also when dead);
+  elseif (alive?) then (yes)
+    :WRITE (READ during lockdown,\nexcept PRIVATE / DEAD);
+  elseif (skeleton?) then (yes)
+    :WRITE in SKELETONS / UNDEAD,\nelse READ;
+  else (dead)
+    :WRITE in SPIRIT_CHAT,\nelse READ;
+  endif
+endswitch
+stop
+
+note right
+  ChannelManager.sync turns this into
+  permission overwrites and changes only
+  what differs (after every change + startup).
+end note
+@enduml

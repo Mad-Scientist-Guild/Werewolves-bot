@@ -1,0 +1,48 @@
+@startuml 07-resolution-pipeline
+title Resolution.run() - one resolution moment (night lock, dusk, instant...)
+
+start
+:_fail_unusable\n(actor dead / ability gone -> FAILED);
+if (kind == night?) then (yes)
+  :GM night overrides\n(kill -> unstoppable attack, spare);
+endif
+:PREPARE_HOOKS\n(e.g. the wolf pack turns its vote into visits + an attack);
+:report every action;
+partition "Interaction pass" {
+  :interact_<ability> for priority < LOCK\n(curses: block / redirect);
+  :build visits from leaves_house actions;
+  :interact_<ability> for LOCK <= priority < INFO\n(locks, stalks, protections);
+  :on_visited on visited players' actors;
+}
+partition "Evaluation pass (read only)" {
+  :resolve_<ability> for every action not blocked\n-> intents: inform / attack / commit / claim;
+}
+partition "Commit pass (state changes)" {
+  :mark actions RESOLVED / BLOCKED\nconsume uses (unless keep_use);
+  :commits with order < 60 (EARLY, NORMAL);
+  repeat
+    :next unprocessed attack;
+    if (attack_prevented?) then (yes)
+      :on_attack_prevented on target actors;
+    else (no)
+      :on_other_killed on every actor;
+      :apply_death\n(life, death record, mayor succession);
+      :on_death (victim) / on_other_death (everyone)\nmay queue more attacks: heartbreak, Lich...;
+    endif
+  repeat while (more attacks?) is (yes)
+  :commits with order >= 60 (LATE);
+  :process attacks queued by late commits;
+  :after_resolution on every actor;
+  :FINAL_HOOKS (win check, first-death spirits);
+  :messages -> PrivateMessage effects;
+}
+:return Outcome(report);
+stop
+
+note right
+  Simultaneity rule: everything that resolves
+  at the same moment reads the state from the
+  start of that moment; state only changes in
+  the commit pass.
+end note
+@enduml

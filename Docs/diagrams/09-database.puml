@@ -1,0 +1,68 @@
+@startuml 09-database
+!pragma layout smetana
+title SQLite schema (Storage/db.py) - one transaction per change
+hide circle
+skinparam linetype ortho
+
+entity games {
+  * id : INTEGER <<PK>>
+  --
+  guild_id : INTEGER
+  status : TEXT (setup / active / ended)
+  phase : TEXT
+  day : INTEGER
+  state : TEXT (GameState JSON)
+  created_at / updated_at : TEXT
+}
+
+entity snapshots {
+  * id : INTEGER <<PK>>
+  --
+  game_id : INTEGER <<FK>>
+  label : TEXT
+  day / phase
+  state : TEXT
+  created_at : TEXT
+}
+
+entity reports {
+  * id : INTEGER <<PK>>
+  --
+  game_id : INTEGER <<FK>>
+  guild_id, day
+  title / body : TEXT
+  posted : INTEGER
+}
+
+entity events {
+  * id : INTEGER <<PK>>
+  --
+  game_id : INTEGER <<FK>>
+  guild_id, at, day, phase
+  category / message : TEXT
+  actor_id, target_ids, data
+  alert : INTEGER
+  posted : INTEGER
+}
+
+entity outbox {
+  * id : INTEGER <<PK>>
+  --
+  game_id : INTEGER <<FK>>
+  guild_id
+  effect : TEXT (Effect JSON)
+  created_at, delivered_at
+  attempts, error
+}
+
+games ||--o{ snapshots : before each transition
+games ||--o{ reports : previews, finals, dusk
+games ||--o{ events : audit log
+games ||--o{ outbox : effects to deliver
+
+note bottom of games
+  commit_game writes games + snapshot + events
+  + outbox + reports in ONE transaction.
+  Rows are only deleted by /game delete.
+end note
+@enduml

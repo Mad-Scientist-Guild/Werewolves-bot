@@ -1,0 +1,30 @@
+@startuml 18-seq-startup
+title Startup and recovery (bot.py)
+
+participant "main()" as Main
+participant "WerewolvesBot\nsetup_hook" as Hook
+participant Database as DB
+participant GameService as GS
+participant "Roles package" as Roles
+participant Discord
+participant GameWorker as W
+participant Scheduler as S
+
+Main -> Main : setup_logging()
+Main -> Hook : bot.run(TOKEN)
+Hook -> DB : connect(), CREATE TABLE IF NOT EXISTS
+Hook -> Hook : build services, fill runtime
+Hook -> GS : load_all() (every stored game, ended ones too)
+Hook -> Roles : import Roles\n(registers roles, modifiers,\nconversions, hooks, command cogs)
+Hook -> Hook : add every RoleCommands cog
+Hook -> Hook : load Cogs/*.py extensions
+Hook -> Hook : add_dynamic_items(DecisionSelect,\nAnswerButton, TelepathReplyButton)
+Hook -> Discord : sync slash commands\n(dev guild or global)
+Hook -> Hook : audit.start()
+Discord -> Main : on_ready
+loop every game
+  Main -> W : wake(handle)
+  W -> W : create missing channels,\ndeliver undelivered effects,\nre-sync permissions
+end
+S -> S : first tick: run overdue transitions\nor pause beyond the catch-up limit
+@enduml

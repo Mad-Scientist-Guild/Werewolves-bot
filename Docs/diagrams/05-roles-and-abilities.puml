@@ -1,0 +1,120 @@
+@startuml 05-roles-and-abilities
+!pragma layout smetana
+title Roles, modifiers, abilities and their commands
+
+abstract class Polymorphic {
+  {static} __poly_family__
+  {static} _poly_tag()
+}
+
+abstract class RoleBase {
+  {static} name: str
+  {static} display / description
+  {static} abilities: tuple[Ability]
+  {static} chats: tuple[str]
+  {static} can_vote_wolf_kill: bool
+  owner: int
+  uses_spent: dict[str, int]
+  last_used: dict[str, int]
+  --
+  available_abilities(state)
+  validate(state, action)
+  interact_<ability>(ctx, action)
+  resolve_<ability>(ctx, action)
+  protects_against(ctx, attack)
+  on_visited / on_attack_prevented
+  on_other_killed / on_death / on_other_death
+  on_other_converted / on_revived
+  after_resolution / on_game_start
+  apparent_faction / apparent_role
+  defeats_stalkers
+  provides / command_source
+  setting / uses_left / consume / refund
+}
+
+class Role {
+  {static} faction: str
+  {static} tags
+  {static} assignable: bool
+}
+
+class Modifier {
+  {static} true_faction: str
+  {static} public_role: PublicRole
+  {static} blocks_dead_chat: bool
+  faction_override(player)
+}
+
+class Ability <<frozen>> {
+  key: str
+  timing: Timing
+  description
+  params: tuple[Param]
+  priority: int
+  leaves_house: bool
+  visits: str
+  uses: int
+  once_per_cycle / usable_while_dead
+  phases / first_day / consume_on_block
+}
+
+class Param <<frozen>> {
+  name, kind: ParamKind
+  description, required
+  allow_self, choices, max_words
+}
+
+class Seer
+class AncientWolf
+class ActorRole {
+  current: Role
+  copied: list[str]
+}
+class TurnedWolf
+class Lover
+class VengefulSpirit
+
+abstract class RoleCommands <<discord GroupCog>> {
+  {static} source: str
+  use(interaction, ability, **params)
+  cancel(interaction, ability)
+}
+class SeerCommands
+class CovenCommands <<abstract=True>> {
+  find()
+  kill_list()
+}
+class CurseweaverCommands
+
+class "ROLE_REGISTRY" as RR <<registry>>
+class "MODIFIER_REGISTRY" as MR <<registry>>
+class "COMMAND_COGS /\nCOMMAND_GROUPS" as CR <<registry>>
+
+Polymorphic <|-- RoleBase
+RoleBase <|-- Role
+RoleBase <|-- Modifier
+Role <|-- Seer
+Role <|-- AncientWolf
+Role <|-- ActorRole
+Modifier <|-- TurnedWolf
+Modifier <|-- Lover
+Modifier <|-- VengefulSpirit
+ActorRole o-- Role : plays a copy
+RoleBase "1" *-- "*" Ability
+Ability "1" *-- "*" Param
+
+RoleCommands <|-- SeerCommands
+RoleCommands <|-- CovenCommands
+CovenCommands <|-- CurseweaverCommands
+SeerCommands ..> Seer : source = "seer"
+
+Role ..> RR : @register_role
+Modifier ..> MR : @register_modifier
+RoleCommands ..> CR : __init_subclass__
+
+note right of RoleBase
+  @register_role / @register_modifier turn
+  subclasses into dataclasses: annotated
+  fields are role state, saved automatically.
+end note
+@enduml

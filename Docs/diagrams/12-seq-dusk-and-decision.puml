@@ -1,0 +1,36 @@
+@startuml 12-seq-dusk-and-decision
+title Dusk: lynch tally, day actions and a Mayor tiebreak decision
+
+participant Scheduler as S
+participant "flow._dusk" as D
+participant voting as V
+participant Resolution as RE
+actor Mayor
+participant "DecisionSelect\n(view)" as Sel
+participant "flow.resolve_decision" as RD
+
+S -> D : run_transition(DUSK)
+D -> V : close mayor ballot (day 1) / lynch ballot
+V --> D : Tally (lynch / tie / abstained / no_votes)
+D -> D : _lynch_target: winner, or Mayor's vote\nif inside the tie, else "needs_mayor_choice"
+D -> RE : Resolution(kind=dusk) with commit(do_lynch, EARLY)
+RE -> RE : DAY actions resolve\n(Pacifist may set lynch_stopped,\nRuthless Counselor sets second_lynch_by)
+RE -> RE : lynch attack (public) unless stopped;\nWitch revive in a LATE commit
+RE --> D : report
+alt Mayor must choose
+  D -> D : create_decision("lynch_tiebreak")\n-> DecisionPrompt effect
+  D -> D : announce the tie
+  ...later...
+  Mayor -> Sel : picks a player
+  Sel -> RD : mutate: resolve_decision
+  RD -> RE : execute_lynch (kind=lynch)
+  RD --> Mayor : "You chose X"
+else decided
+  D -> D : VoteResults + Announcement
+end
+opt second lynch called
+  D -> V : open lynch2 (no abstain), lockdown = True
+end
+D -> V : open the wolves' ballot
+D -> D : phase = NIGHT, seed for tonight
+@enduml

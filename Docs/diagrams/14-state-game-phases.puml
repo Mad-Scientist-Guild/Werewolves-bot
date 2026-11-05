@@ -1,0 +1,26 @@
+@startuml 14-state-game-phases
+!pragma layout smetana
+title Game phases and transitions
+
+[*] --> SETUP : /game create
+SETUP : players join, role pool,\nfamilies, assignment, channels
+SETUP --> DAY : /game start (day 1)
+SETUP --> ENDED : /gm end_game
+
+DAY : day actions, mayor election (day 1)\nlynch open after the newspaper
+DAY --> DAY : NEWSPAPER 12:00\npublic roles, lynch opens
+DAY --> NIGHT : DUSK 19:00\nlynch result, day actions,\nwolves' vote opens
+
+NIGHT : night actions\n(second lynch until 20:00 if called)
+NIGHT --> NIGHT : SECOND_LYNCH_END 20:00
+NIGHT --> SLEEP : NIGHT_LOCK 00:00\npreview for the GMs
+
+SLEEP : actions locked\nGM adjustments
+SLEEP --> DAY : MORNING 08:00\nnight applied, day += 1
+
+DAY --> ENDED : /gm end_game
+NIGHT --> ENDED : /gm end_game
+SLEEP --> ENDED : /gm end_game
+ENDED : data kept until /game delete
+ENDED --> [*] : /game delete
+@enduml

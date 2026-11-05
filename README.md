@@ -186,5 +186,6 @@ Documentation:
   requirements, the resolution pipeline, every hook and helper, a worked example.
 - [`Docs/Developer guide - architecture and data.md`](Docs/Developer%20guide%20-%20architecture%20and%20data.md) -
   layers, the state dataclasses, serialisation, the database and the life of a change, with diagrams.
+- [`Docs/diagrams/`](Docs/diagrams/README.md) - PlantUML diagrams of every part of the architecture.
 - [`Docs/Player commands.md`](Docs/Player%20commands.md) - the player guide. It's generated, so run
   `python tools/generate_docs.py` after changing roles.

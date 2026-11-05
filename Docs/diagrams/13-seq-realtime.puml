@@ -1,0 +1,40 @@
+@startuml 13-seq-realtime
+title Real-time features: eavesdrop, yes/no question, telepath message
+
+actor "Peeking Girl" as PG
+participant "realtime cog" as RT
+participant "Core/realtime.py" as CR
+actor Wolf
+actor Spiritualist as SP
+actor "Dead player" as Dead
+participant "AnswerButton" as AB
+
+== Eavesdrop ==
+PG -> CR : /peeking_girl peek 21:00\n-> schedule_eavesdrop (60 min window)
+Wolf -> RT : message in the wolf chat
+RT -> CR : capture(chat, speaker, at, text)
+CR -> CR : first message in window:\ncapture_until = at + 15 min
+loop every 15 s
+  RT -> CR : due_eavesdrops(now)
+  CR -> PG : finish_eavesdrop -> transcript\n(numbered speakers, timestamps)
+end
+
+== Yes/no question (Spiritualist, Open Book) ==
+SP -> CR : /spiritualist ask -> ask_the_dead
+CR -> Dead : QuestionPrompt (buttons in the dead chat)
+Dead -> AB : Yes / No
+AB -> CR : answer_question
+alt everyone answered
+  CR -> SP : close_question -> counts
+else deadline (19:00 / 00:00)
+  RT -> CR : due_questions -> close_question
+end
+
+== Telepath ==
+actor Telepath as TP
+actor Target as T
+TP -> CR : /telepath send -> send_telepath_message
+CR -> T : TelepathPrompt (Reply button)
+T -> CR : TelepathReplyModal -> reply_telepath_message
+CR -> TP : "X answered: ..."
+@enduml

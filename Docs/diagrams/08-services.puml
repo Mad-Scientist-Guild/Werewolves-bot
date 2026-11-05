@@ -1,0 +1,96 @@
+@startuml 08-services
+!pragma layout smetana
+title Services and storage
+
+class Runtime <<singleton runtime>> {
+  bot, db, games
+  audit, channels
+  delivery, worker
+}
+
+class GameService {
+  db: Database
+  handles: dict[guild_id, GameHandle]
+  listeners: list
+  --
+  load_all()
+  find(guild) / get(guild) / all()
+  create(guild)
+  mutate(guild, snapshot=None) <<async ctx>>
+  restore(guild, snapshot_id)
+  delete(guild)
+}
+
+class GameHandle {
+  game_id: int
+  state: GameState
+  lock: asyncio.Lock
+}
+
+class GameWorker {
+  wake(handle)
+  _run(guild): loop
+}
+
+class EffectDelivery {
+  deliver(guild, handle)
+  apply(guild, handle, effect)
+}
+
+class ChannelManager {
+  setup_base(...)
+  ensure_chat_channels(...)
+  sync(guild, handle)
+  remove_game(guild, state)
+}
+
+class AuditPoster {
+  start() / wake()
+  flush(): events + reports
+}
+
+class Database {
+  write_lock: asyncio.Lock
+  --
+  create_game / commit_game
+  active_games / delete_game
+  add_event / unposted_events / recent_events
+  unposted_reports / latest_report
+  pending_effects / mark_effect_*
+  snapshots / snapshot
+}
+
+class "codec" as Codec {
+  encode(state): str
+  decode(text): GameState
+}
+
+class "views" as Views {
+  DecisionSelect
+  AnswerButton
+  TelepathReplyButton
+  TelepathReplyModal
+}
+
+Runtime --> GameService
+Runtime --> GameWorker
+Runtime --> EffectDelivery
+Runtime --> ChannelManager
+Runtime --> AuditPoster
+Runtime --> Database
+
+GameService "1" *-- "*" GameHandle
+GameService --> Database
+GameService ..> Codec
+GameService ..> GameWorker : listener: wake(handle)
+GameWorker --> ChannelManager
+GameWorker --> EffectDelivery
+GameWorker ..> AuditPoster : wake
+EffectDelivery --> Database
+EffectDelivery --> ChannelManager
+EffectDelivery ..> Views : decision, answer,\nreply buttons
+ChannelManager --> GameService : mutate (store ids)
+ChannelManager --> Database : add_event
+AuditPoster --> Database
+Views --> GameService : mutate
+@enduml

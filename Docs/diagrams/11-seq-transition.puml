@@ -1,0 +1,41 @@
+@startuml 11-seq-transition
+title Scheduler: night lock (preview) and morning (apply)
+
+participant "Scheduler\n(every 30 s)" as S
+participant GameService as GS
+participant "flow.run_transition" as FL
+participant Resolution as RE
+participant Database as DB
+
+== 00:00 night lock ==
+S -> S : now >= next_transition.at ?
+alt late by more than the catch-up limit
+  S -> GS : mutate: paused = True + alert
+else on time (or approved catch-up)
+  S -> GS : mutate(snapshot="before night_lock (day N)")
+  GS -> FL : run_transition(NIGHT_LOCK, scheduled)
+  FL -> FL : phase = SLEEP\nclose the wolf vote
+  FL -> RE : preview_night(deepcopy, stored seed)
+  RE --> FL : Outcome(report)
+  FL -> FL : next_transition from the scheduled time
+  GS -> DB : commit (state + snapshot + "Night N - preview")
+end
+
+== sleep time: GM changes ==
+note over GS : /gm act, /gm override, sleep-time ANYTIME actions\n-> refresh_preview -> "Night N - preview (updated)"
+
+== 08:00 morning ==
+S -> DB : latest "Night N - preview"
+S -> GS : mutate(snapshot="before morning (day N)")
+GS -> FL : run_transition(MORNING)
+FL -> RE : resolve_night(real state, same seed)
+RE --> FL : deaths, messages (effects), report
+FL -> FL : archive wolf vote, clear overrides\nday += 1, phase = DAY\nexpire conditions
+S -> S : final != preview ?\n-> GM alert
+GS -> DB : commit
+
+note over S, DB
+  A transition that raises is rolled back and the clock pauses.
+  Order: MORNING -> NEWSPAPER -> DUSK -> (SECOND_LYNCH_END) -> NIGHT_LOCK
+end note
+@enduml

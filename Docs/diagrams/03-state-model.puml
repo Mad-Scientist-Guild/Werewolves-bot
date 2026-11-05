@@ -1,0 +1,168 @@
+@startuml 03-state-model
+!pragma layout smetana
+title Game state (Core/state.py) - everything references players and channels by id
+hide empty methods
+
+class GameState {
+  guild_id: int
+  game_id: int
+  phase: Phase
+  day: int
+  paused: bool
+  started_at / ended_at / winner
+  role_pool: dict[str, int]
+  backups: list[int]
+  channels: dict[str, int]
+  categories: dict[str, list[int]]
+  discord_roles: dict[str, int]
+  mayor / mayor_successor: int
+  lockdown: bool
+  next_transition: Transition
+  seeds / counters: dict
+  aliases: dict
+  data: dict
+  .. transient (never stored as state) ..
+  pending_logs: list[LogEntry]
+  pending_effects: list[Effect]
+  pending_reports: list
+  --
+  player(id) / alive_players()
+  house_of(id) / housemates(id)
+  chat(key) / ensure_chat(...)
+  moment(kind, day)
+  log() / emit() / report()
+}
+
+class Player {
+  user_id: int
+  display_name: str
+  life: LifeState
+  faction: str
+  original_role: str
+  family: str
+  private_chat: str
+  public_role: PublicRole
+  last_active_at / inactivity_level
+  previous_user_ids: list[int]
+  --
+  actors()
+  true_faction()
+  condition(key) / add_condition()
+}
+
+class Chat {
+  key: str
+  kind: ChatKind
+  name: str
+  channel_id: int
+  members: dict[int, Membership]
+  archived: bool
+}
+
+class SubmittedAction {
+  id: int
+  actor: int
+  source: str
+  ability: str
+  resolves_at: str
+  targets: list[int]
+  params: dict
+  status: ActionStatus
+  by_gm: bool
+}
+
+class Ballot {
+  kind: str
+  day: int
+  is_open / allow_abstain
+  votes: dict[int, int]
+  shown_as: dict[int, int]
+  result: dict
+}
+class VoteRecord {
+  voter, target, at, shown_as
+}
+class Decision {
+  id, kind, chooser
+  options: list[int]
+  prompt
+  resolved, choice
+}
+class Condition {
+  key: str
+  source: int
+  expires: str
+  data: dict
+}
+class DeathRecord {
+  day, phase, cause
+  killer_ids, killer_role
+  public, revived
+}
+class Eavesdrop {
+  id, listener, source_chat
+  window_start / window_end
+  capture_until, night, purpose
+  done
+}
+class OverheardMessage {
+  speaker, at, text
+}
+class YesNoQuestion {
+  id, asker, text, kind, where
+  voters: list[int]
+  answers: dict[int, bool]
+  deadline, done
+}
+class TelepathMessage {
+  id, sender, target, text
+  reply, sent_at, replied_at
+}
+class NightOverride {
+  kind: kill | spare
+  player, cause, by
+}
+class Settings {
+  newspaper_url
+  role_overrides
+  family_size
+  inactivity_warn/flag_hours
+  gm_role_id
+  notify_blocked_actions
+}
+class Schedule {
+  morning, newspaper, dusk
+  second_lynch_end, night_lock
+  timezone, catch_up_limit_minutes
+}
+class Transition {
+  kind, at
+}
+abstract class RoleBase <<Polymorphic>>
+class Role
+class Modifier
+RoleBase <|-- Role
+RoleBase <|-- Modifier
+
+GameState "1" *-- "*" Player : players
+GameState "1" *-- "*" Chat : chats
+GameState "1" *-- "*" SubmittedAction : actions
+GameState "1" *-- "*" Ballot : ballots / ballot_archive
+GameState "1" *-- "*" Decision : decisions
+GameState "1" *-- "*" NightOverride : night_overrides
+GameState "1" *-- "*" Eavesdrop : eavesdrops
+GameState "1" *-- "*" YesNoQuestion : questions
+GameState "1" *-- "*" TelepathMessage : telepath_messages
+GameState "1" *-- "1" Settings
+GameState "1" *-- "0..1" Transition
+Settings *-- Schedule
+Ballot "1" *-- "*" VoteRecord : history
+Eavesdrop "1" *-- "*" OverheardMessage : messages
+Player "1" *-- "0..1" Role : role
+Player "1" *-- "*" Modifier : modifiers
+Player "1" *-- "*" Condition : conditions
+Player "1" *-- "*" DeathRecord : deaths
+
+note "Players, channels and Discord roles are stored\nas ids; the Discord layer looks them up.\nA house is a family: house_of(id) = the family chat key." as N1
+N1 .. Player
+@enduml

@@ -1,0 +1,64 @@
+@startuml 01-layers
+!pragma layout smetana
+title Layers and responsibilities
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+actor Player
+actor GM
+cloud "Discord" as Discord
+
+package "Discord-facing" {
+  [bot.py\nstartup, error handling,\nlogging of failed commands] as Bot
+  [Cogs\n/game /setup /gm /lynch /mayor /me\nscheduler, activity, realtime] as Cogs
+  [Role command cogs\n(RoleCommands subclasses\nin Roles/*)] as RoleCmds
+}
+
+package "Services (glue)" {
+  [GameService\nlock, save, rollback] as GS
+  [GameWorker\nfollow-up after each change] as Worker
+  [EffectDelivery\noutbox -> Discord] as Delivery
+  [ChannelManager\ncreate + reconcile permissions] as Channels
+  [AuditPoster\nevents + reports -> #mod-log] as Audit
+  [views\npersistent buttons / menus] as Views
+}
+
+package "Core (pure engine, no Discord)" {
+  [state\nGameState dataclasses] as State
+  [actions / resolution / flow\nvoting / access / clock / realtime] as Engine
+  [Roles\nRole + Modifier classes] as Roles
+}
+
+package "Storage" {
+  [codec\nGameState <-> JSON] as Codec
+  database "SQLite\n(db.py)" as DB
+}
+
+Player --> Discord
+GM --> Discord
+Discord --> Bot : interactions,\nmessages
+Bot --> Cogs
+Bot --> RoleCmds
+Cogs --> GS
+RoleCmds --> GS
+Views --> GS
+GS --> Engine : mutate state
+Engine --> State
+Roles --> Engine : hooks
+GS --> Codec
+Codec --> DB
+GS ..> Worker : notify
+Worker --> Channels
+Worker --> Delivery
+Delivery --> DB : outbox
+Audit --> DB : events, reports
+Delivery --> Discord
+Channels --> Discord
+Audit --> Discord
+
+note bottom of Engine
+  Core never imports discord or Services.
+  It changes dataclasses and queues Effects;
+  that is why it is fully unit-testable.
+end note
+@enduml

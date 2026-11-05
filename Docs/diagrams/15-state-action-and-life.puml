@@ -1,0 +1,27 @@
+@startuml 15-state-action-and-life
+!pragma layout smetana
+title Action lifecycle and player life states
+
+state "SubmittedAction.status" as A {
+  [*] --> PENDING : submit
+  PENDING --> REPLACED : same ability\nsubmitted again
+  PENDING --> CANCELLED : /x cancel,\n/gm cancel_action
+  PENDING --> RESOLVED : resolution ran it
+  PENDING --> BLOCKED : lock / stalk / curse
+  PENDING --> FAILED : actor dead or\nability gone
+  REPLACED --> [*]
+  CANCELLED --> [*]
+  RESOLVED --> [*]
+  BLOCKED --> [*]
+  FAILED --> [*]
+}
+
+state "Player.life" as L {
+  [*] --> ALIVE
+  ALIVE --> DEAD : attack succeeds,\nlynch, GM kill
+  DEAD --> ALIVE : Witch elixir,\nGM revive
+  DEAD --> SKELETON : Lich guesses right,\nGambler visits the Lich
+  SKELETON --> PERMA_DEAD : killed again,\nthe Lich dies
+  PERMA_DEAD --> [*]
+}
+@enduml

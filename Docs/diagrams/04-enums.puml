@@ -1,0 +1,80 @@
+@startuml 04-enums
+!pragma layout smetana
+title Enums used by the state
+
+enum Phase {
+  SETUP
+  DAY
+  NIGHT
+  SLEEP
+  ENDED
+}
+enum LifeState {
+  ALIVE
+  DEAD
+  SKELETON
+  PERMA_DEAD
+}
+enum ChatKind {
+  PRIVATE
+  VILLAGE
+  DEAD
+  FAMILY
+  WOLVES
+  UNDEAD
+  SKELETONS
+  LOVERS
+  BROTHERS
+  COVEN
+  SPIRIT_CHAT
+  CUSTOM
+}
+enum Membership {
+  ACTIVE
+  FORMER
+  REVOKED
+}
+enum PublicRole {
+  NONE
+  DEAD
+  VENGEFUL_SPIRIT
+  SKELETON
+}
+enum ActionStatus {
+  PENDING
+  REPLACED
+  CANCELLED
+  RESOLVED
+  BLOCKED
+  FAILED
+}
+enum Timing {
+  NIGHT
+  DAY
+  ANYTIME
+  INSTANT
+}
+enum Priority {
+  CURSE = 5
+  LOCK = 10
+  STALK = 15
+  PROTECT = 20
+  INFO = 30
+  CONVERT = 40
+  KILL = 50
+  POST = 70
+}
+enum Access {
+  NONE
+  READ
+  REACT
+  WRITE
+}
+enum TransitionKind {
+  MORNING
+  NEWSPAPER
+  DUSK
+  SECOND_LYNCH_END
+  NIGHT_LOCK
+}
+@enduml
